@@ -59,19 +59,25 @@ reads the console, and can take state over a serial fallback channel — see `CO
 
 ## Install
 
-While the repository is private, install it from a local clone:
+**Plugin Manager → Get More → ... from URL**, with either of these:
+
+```
+https://github.com/Luix333/OctoPrint-HappyHareMMU/releases/download/v0.1.0/octoprint_happyharemmu-0.1.0-py3-none-any.whl
+https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.0.zip
+```
+
+The first is the built wheel and installs directly; the second is the source archive and is built on
+the printer. Either way OctoPrint restarts itself afterwards.
+
+The Plugin Manager also takes the wheel through **... from an uploaded file** (it accepts `.whl`,
+`.zip` and `.tar.gz`), and from a shell on the printer:
 
 ```bash
-git clone https://github.com/Luix333/OctoPrint-HappyHareMMU.git
-~/oprint/bin/pip install ./OctoPrint-HappyHareMMU
+~/oprint/bin/pip install https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.0.zip
 sudo service octoprint restart
 ```
 
-Once it is public, the usual one-liner works from OctoPrint's *Plugin Manager → Get More → from URL*:
-
-```
-https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/main.zip
-```
+Restarting OctoPrint drops its serial connection, so install between prints, not during one.
 
 ## After installing
 
