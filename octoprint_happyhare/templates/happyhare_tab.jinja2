@@ -1,0 +1,122 @@
+<div class="hh-root" id="hh-root">
+
+  <div class="hh-offline" id="hh-offline">
+    <strong>No Happy Hare state.</strong>
+    <span id="hh-offline-reason">Waiting for Klipper…</span>
+  </div>
+
+  <div class="hh-strip" id="hh-strip"></div>
+
+  <div class="hh-panel hh-recovery" id="hh-recovery" hidden>
+    <header>
+      <h3>MMU paused — recovery</h3>
+      <span class="hh-badge crit" id="hh-recovery-reason"></span>
+    </header>
+    <div class="hh-body" id="hh-recovery-steps"></div>
+  </div>
+
+  <ul class="nav nav-pills hh-subtabs" id="hh-subtabs">
+    <li class="active"><a href="#" data-view="operate">Operate</a></li>
+    <li><a href="#" data-view="gates">Gates &amp; TTG</a></li>
+    <li><a href="#" data-view="preflight">Pre-flight</a></li>
+    <li><a href="#" data-view="health">Health</a></li>
+    <li><a href="#" data-view="console">Console</a></li>
+  </ul>
+
+  <section class="hh-view" id="hh-view-operate">
+    <div class="hh-panel">
+      <header>
+        <h3 id="hh-rail-title">Selector</h3>
+        <span class="hh-hint" id="hh-rail-hint"></span>
+      </header>
+      <div class="hh-body">
+        <div class="hh-svgbox" id="hh-rail"></div>
+        <div class="hh-hint">Click a gate for its actions. The ring is gate status; the badge under each spool is the tool mapped to it.</div>
+      </div>
+    </div>
+
+    <div class="hh-panel">
+      <header>
+        <h3>Filament path</h3>
+        <span class="hh-hint" id="hh-path-hint"></span>
+      </header>
+      <div class="hh-body"><div class="hh-svgbox" id="hh-path"></div></div>
+    </div>
+
+    <div class="hh-panel">
+      <header>
+        <h3>Tools</h3>
+        <span class="hh-hint">MMU_CHANGE_TOOL</span>
+      </header>
+      <div class="hh-body">
+        <div class="hh-tools" id="hh-tools"></div>
+        <div class="hh-actions" id="hh-actions"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="hh-view" id="hh-view-gates" hidden>
+    <div class="hh-panel">
+      <header>
+        <h3>Gate map</h3>
+        <span class="hh-hint">Each row is sent as one MMU_GATE_MAP command</span>
+      </header>
+      <div class="hh-body">
+        <div class="hh-tablewrap"><table class="table table-condensed hh-table" id="hh-gate-table"></table></div>
+      </div>
+    </div>
+    <div class="hh-panel">
+      <header>
+        <h3>Tool → gate &amp; EndlessSpool</h3>
+        <span class="hh-hint">MMU_TTG_MAP · MMU_ENDLESS_SPOOL</span>
+      </header>
+      <div class="hh-body">
+        <div class="hh-tablewrap"><table class="table table-condensed hh-table" id="hh-ttg-table"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="hh-view" id="hh-view-preflight" hidden>
+    <div class="hh-panel">
+      <header>
+        <h3>Pre-flight check</h3>
+        <span class="hh-hint">Compares the file's slicer data with what is loaded</span>
+      </header>
+      <div class="hh-body">
+        <div class="hh-row">
+          <select id="hh-preflight-file" class="hh-grow"></select>
+          <button class="btn btn-small" id="hh-preflight-run">Check</button>
+        </div>
+        <div id="hh-preflight-out"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="hh-view" id="hh-view-health" hidden>
+    <div class="hh-panel">
+      <header><h3>Gate reliability</h3><span class="hh-hint">from save_variables</span></header>
+      <div class="hh-body"><div class="hh-bars" id="hh-quality"></div></div>
+    </div>
+    <div class="hh-panel">
+      <header><h3>Maintenance counters</h3><span class="hh-hint">MMU_STATS SHOWCOUNTS</span></header>
+      <div class="hh-body"><div class="hh-bars" id="hh-counters"></div></div>
+    </div>
+    <div class="hh-panel">
+      <header><h3>Swap time</h3><span class="hh-hint" id="hh-swap-total"></span></header>
+      <div class="hh-body">
+        <div class="hh-stack" id="hh-swap-stack"></div>
+        <div class="hh-legend" id="hh-swap-legend"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="hh-view" id="hh-view-console" hidden>
+    <div class="hh-panel">
+      <header>
+        <h3>Happy Hare console</h3>
+        <span class="hh-hint" id="hh-protected-count"></span>
+      </header>
+      <div class="hh-body"><div class="hh-console" id="hh-console"></div></div>
+    </div>
+  </section>
+</div>

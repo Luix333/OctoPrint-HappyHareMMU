@@ -1,0 +1,321 @@
+/*
+ * Happy Hare MMU for OctoPrint.
+ *
+ * Every colour is taken from the host theme first (UI Customizer themes publish
+ * --accent, --background, --grey2..4, --quiteWhite; stock OctoPrint publishes
+ * none of them), so the panel is skinned by whatever the user runs and only falls
+ * back to its own palette. Nothing here uses !important, and every selector is
+ * prefixed hh-, so a user's custom CSS still wins.
+ */
+
+.hh-root,
+.hh-side {
+    --hh-accent: var(--accent, #2d6a9f);
+    --hh-accent-soft: rgba(45, 106, 159, 0.14);
+    --hh-ink: var(--quiteWhite, #222222);
+    --hh-ink-2: var(--quiteWhite-dark, #4a4a4a);
+    --hh-muted: var(--grey, #7a8794);
+    --hh-surface: var(--grey2, #ffffff);
+    --hh-surface-2: var(--grey3, #f4f6f8);
+    --hh-surface-3: var(--grey4, #e3e8ed);
+    --hh-line: var(--grey4, #d3dbe2);
+    --hh-rail: var(--grey4, #b9c7d3);
+    --hh-ok: var(--green, #2f7d5b);
+    --hh-warn: #a96908;
+    --hh-crit: var(--red, #bc3b2d);
+    color: var(--hh-ink);
+}
+
+/* panels ---------------------------------------------------------------- */
+.hh-panel {
+    border: 1px solid var(--hh-line);
+    border-radius: 6px;
+    background: var(--hh-surface);
+    margin-bottom: 12px;
+}
+.hh-panel > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 7px 11px;
+    border-bottom: 1px solid var(--hh-line);
+}
+.hh-panel > header h3 {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0;
+    line-height: 1.3;
+}
+.hh-panel .hh-body { padding: 10px 11px; }
+.hh-hint { font-size: 11.5px; color: var(--hh-muted); }
+.hh-label {
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--hh-muted);
+    font-weight: 600;
+}
+.hh-row { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+.hh-grow { flex: 1 1 auto; min-width: 0; }
+.hh-between { display: flex; justify-content: space-between; }
+
+.hh-offline {
+    border: 1px solid var(--hh-warn);
+    background: rgba(169, 105, 8, 0.1);
+    border-radius: 6px;
+    padding: 9px 11px;
+    margin-bottom: 12px;
+    font-size: 13px;
+}
+
+/* status strip ---------------------------------------------------------- */
+.hh-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.hh-tile {
+    background: var(--hh-surface-2);
+    border: 1px solid var(--hh-line);
+    border-radius: 6px;
+    padding: 7px 9px;
+}
+.hh-tile b {
+    display: block;
+    font-size: 13.5px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+.hh-tile.sev-ok { border-left: 3px solid var(--hh-ok); }
+.hh-tile.sev-warn { border-left: 3px solid var(--hh-warn); }
+.hh-tile.sev-crit { border-left: 3px solid var(--hh-crit); background: rgba(188, 59, 45, 0.12); }
+.hh-tile.sev-act { border-left: 3px solid var(--hh-accent); background: var(--hh-accent-soft); }
+
+/* compact density (UI Customizer / narrow containers) ------------------- */
+.hh-root.hh-compact .hh-strip { display: flex; flex-wrap: wrap; gap: 6px; }
+.hh-root.hh-compact .hh-tile {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 8px;
+    border-left-width: 1px;
+}
+.hh-root.hh-compact .hh-tile b { font-size: 12px; }
+.hh-root.hh-compact .hh-panel { margin-bottom: 8px; }
+.hh-root.hh-compact .hh-panel > header { padding: 5px 9px; }
+.hh-root.hh-compact .hh-panel .hh-body { padding: 8px; }
+.hh-root.hh-compact .hh-console { height: 190px; }
+.hh-root.hh-compact .hh-svgbox svg { min-width: 440px; }
+
+/* svg blocks ------------------------------------------------------------ */
+.hh-svgbox { width: 100%; overflow-x: auto; }
+.hh-svgbox svg { display: block; width: 100%; height: auto; min-width: 520px; }
+.hh-gate { cursor: pointer; }
+.hh-gate:hover .hh-gate-plate { stroke: var(--hh-accent); }
+.hh-gate:focus { outline: none; }
+.hh-gate:focus-visible .hh-gate-plate { stroke: var(--hh-accent); stroke-width: 2.5; }
+
+/* tools ----------------------------------------------------------------- */
+.hh-tools {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+    gap: 6px;
+    margin-bottom: 9px;
+}
+.hh-tool {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid var(--hh-line);
+    background: var(--hh-surface);
+    color: var(--hh-ink);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 12.5px;
+    cursor: pointer;
+}
+.hh-tool.on { border-color: var(--hh-accent); background: var(--hh-accent-soft); font-weight: 600; }
+.hh-tool[disabled] { opacity: 0.45; cursor: not-allowed; }
+.hh-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid var(--hh-line);
+    display: inline-block;
+    flex: none;
+}
+.hh-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* tables ---------------------------------------------------------------- */
+.hh-tablewrap { overflow-x: auto; }
+.hh-table { font-size: 12.5px; }
+.hh-table th {
+    font-size: 10.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--hh-muted);
+    white-space: nowrap;
+}
+.hh-table td { vertical-align: middle; }
+.hh-table tr.hh-selected td { background: var(--hh-accent-soft); }
+.hh-input-sm { width: 66px; }
+.hh-chips { display: inline-flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+
+.hh-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-right: 4px;
+}
+.hh-badge.ok { background: rgba(47, 125, 91, 0.16); color: var(--hh-ok); }
+.hh-badge.warn { background: rgba(169, 105, 8, 0.16); color: var(--hh-warn); }
+.hh-badge.crit { background: rgba(188, 59, 45, 0.16); color: var(--hh-crit); }
+.hh-badge.mute { background: var(--hh-surface-3); color: var(--hh-muted); }
+
+/* recovery -------------------------------------------------------------- */
+.hh-recovery { border-color: var(--hh-crit); }
+.hh-recovery > header h3 { color: var(--hh-crit); }
+.hh-step {
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    padding: 7px 9px;
+    border: 1px solid var(--hh-line);
+    border-radius: 6px;
+    background: var(--hh-surface-2);
+    margin-bottom: 7px;
+}
+.hh-step.done { opacity: 0.55; }
+.hh-step.now { border-color: var(--hh-accent); background: var(--hh-accent-soft); }
+.hh-step p { margin: 0; font-size: 12.5px; }
+.hh-step-no {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--hh-surface-3);
+    font-size: 11.5px;
+    font-weight: 600;
+}
+.hh-step.now .hh-step-no { background: var(--hh-accent); color: #ffffff; }
+
+/* health ---------------------------------------------------------------- */
+.hh-bars { display: grid; gap: 5px; }
+.hh-bar {
+    display: grid;
+    grid-template-columns: 90px 1fr 130px;
+    gap: 9px;
+    align-items: center;
+    font-size: 12px;
+}
+.hh-bar .hh-track {
+    height: 9px;
+    border-radius: 999px;
+    background: var(--hh-surface-3);
+    overflow: hidden;
+}
+.hh-bar .hh-track > i { display: block; height: 100%; border-radius: 999px; }
+.hh-stack {
+    display: flex;
+    height: 22px;
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid var(--hh-line);
+}
+.hh-stack > i { display: block; }
+.hh-legend {
+    display: flex;
+    gap: 11px;
+    flex-wrap: wrap;
+    font-size: 11.5px;
+    color: var(--hh-muted);
+    margin-top: 7px;
+}
+.hh-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.hh-legend i { width: 9px; height: 9px; border-radius: 2px; display: block; }
+
+/* console --------------------------------------------------------------- */
+.hh-console {
+    font-family: monospace;
+    font-size: 11.5px;
+    background: var(--hh-surface-2);
+    border: 1px solid var(--hh-line);
+    border-radius: 6px;
+    padding: 8px;
+    height: 260px;
+    overflow-y: auto;
+}
+.hh-line { white-space: pre-wrap; word-break: break-word; color: var(--hh-ink-2); }
+.hh-line.err { color: var(--hh-crit); }
+.hh-flag {
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 600;
+    background: rgba(47, 125, 91, 0.16);
+    color: var(--hh-ok);
+    border-radius: 4px;
+    padding: 0 5px;
+    margin-left: 6px;
+}
+
+/* sidebar --------------------------------------------------------------- */
+.hh-side-head { display: flex; align-items: center; gap: 9px; margin-bottom: 8px; }
+.hh-side-head .hh-badge { margin-left: auto; }
+.hh-spool {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid var(--hh-line);
+    display: inline-block;
+    flex: none;
+}
+.hh-side-tool { font-weight: 600; font-size: 13px; }
+.hh-kv {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px 10px;
+    font-size: 12.5px;
+    margin: 0 0 8px;
+}
+.hh-kv dt { color: var(--hh-muted); font-weight: 400; }
+.hh-kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.hh-meter {
+    height: 6px;
+    border-radius: 999px;
+    background: var(--hh-surface-3);
+    overflow: hidden;
+    margin-top: 3px;
+}
+.hh-meter > i { display: block; height: 100%; border-radius: 999px; background: var(--hh-ok); }
+.hh-side-buttons { margin: 9px 0 6px; }
+.hh-side-meter { margin-bottom: 6px; }
+
+/* navbar ---------------------------------------------------------------- */
+#hh-navbar-item .hh-nav-swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    border: 1px solid var(--hh-line, #888);
+    display: inline-block;
+    margin-right: 5px;
+    vertical-align: -1px;
+}
+#hh-navbar-item.hh-alarm .hh-nav-text { color: var(--red, #bc3b2d); font-weight: 600; }
+
+/* dialog ---------------------------------------------------------------- */
+.hh-dialog .modal-body p { margin: 0 0 6px; }
+.hh-prompt-buttons { justify-content: flex-end; width: 100%; }
+
+@media (max-width: 767px) {
+    .hh-bar { grid-template-columns: 70px 1fr; }
+    .hh-bar > :last-child { grid-column: 1 / -1; }
+}

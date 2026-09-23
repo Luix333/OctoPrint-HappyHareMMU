@@ -1,0 +1,1593 @@
+<title>Happy Hare MMU Panel</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#e8edf2; --surface:#ffffff; --surface-2:#f2f6f9; --surface-3:#e4ebf1;
+  --ink:#14202b; --ink-2:#37485a; --muted:#61748a; --line:#c9d6e0; --line-soft:#dde6ed;
+  --accent:#2d6a9f; --accent-ink:#1d4d78; --accent-soft:rgba(45,106,159,.12);
+  --ok:#2f7d5b; --ok-soft:rgba(47,125,91,.14);
+  --warn:#a96908; --warn-soft:rgba(169,105,8,.15);
+  --crit:#bc3b2d; --crit-soft:rgba(188,59,45,.14);
+  --rail:#b9c7d3; --shadow:0 1px 2px rgba(16,32,48,.10),0 6px 18px rgba(16,32,48,.06);
+  --sans:"IBM Plex Sans",-apple-system,Segoe UI,Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0f151c; --surface:#18202a; --surface-2:#1f2935; --surface-3:#26323f;
+    --ink:#e3ebf3; --ink-2:#c2d0dd; --muted:#8d9dad; --line:#2b3745; --line-soft:#232e3a;
+    --accent:#7bb5e7; --accent-ink:#a6cef2; --accent-soft:rgba(123,181,231,.16);
+    --ok:#55b78a; --ok-soft:rgba(85,183,138,.16);
+    --warn:#dfa444; --warn-soft:rgba(223,164,68,.16);
+    --crit:#e2705f; --crit-soft:rgba(226,112,95,.16);
+    --rail:#3b4a5a; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.28);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0f151c; --surface:#18202a; --surface-2:#1f2935; --surface-3:#26323f;
+  --ink:#e3ebf3; --ink-2:#c2d0dd; --muted:#8d9dad; --line:#2b3745; --line-soft:#232e3a;
+  --accent:#7bb5e7; --accent-ink:#a6cef2; --accent-soft:rgba(123,181,231,.16);
+  --ok:#55b78a; --ok-soft:rgba(85,183,138,.16);
+  --warn:#dfa444; --warn-soft:rgba(223,164,68,.16);
+  --crit:#e2705f; --crit-soft:rgba(226,112,95,.16);
+  --rail:#3b4a5a; --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 22px rgba(0,0,0,.28);
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.45;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:18px 40px}
+h1,h2,h3{margin:0;text-wrap:balance}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lbl{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* ---------- fake OctoPrint chrome ---------- */
+.opbar{display:flex;align-items:center;gap:14px;background:var(--surface);border:1px solid var(--line);
+  border-radius:10px 10px 0 0;padding:8px 12px;box-shadow:var(--shadow)}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:.01em}
+.brand .dot{width:9px;height:9px;border-radius:50%;background:var(--ok)}
+.brand small{color:var(--muted);font-weight:400}
+.optabs{display:flex;gap:2px;margin-left:auto;flex-wrap:wrap}
+.optab{padding:5px 10px;border-radius:6px;font-size:12.5px;color:var(--muted);border:1px solid transparent}
+.optab.on{color:var(--ink);background:var(--accent-soft);border-color:var(--line-soft)}
+.navchip{display:flex;align-items:center;gap:7px;padding:4px 9px;border:1px solid var(--line);border-radius:999px;
+  background:var(--surface-2);font-size:12.5px;white-space:nowrap}
+.navchip .sw{width:14px;height:14px;border-radius:3px;border:1px solid var(--line)}
+.navchip.alarm{border-color:var(--crit);background:var(--crit-soft);color:var(--crit);animation:pulse 1.1s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.45}}
+@media (prefers-reduced-motion:reduce){.navchip.alarm{animation:none}}
+
+.shell{display:grid;grid-template-columns:262px minmax(0,1fr);gap:0;border:1px solid var(--line);border-top:0;
+  border-radius:0 0 10px 10px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.side{background:var(--surface-2);border-right:1px solid var(--line);padding:14px 13px;display:flex;flex-direction:column;gap:13px}
+.main{padding:14px 15px 18px;min-width:0}
+@media (max-width:860px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .side{border-right:0;border-bottom:1px solid var(--line)}
+}
+
+/* ---------- sidebar widget ---------- */
+.sw-card{background:var(--surface);border:1px solid var(--line-soft);border-radius:9px;padding:11px}
+.sw-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:9px}
+.spool{display:flex;align-items:center;gap:9px}
+.spool .disc{width:30px;height:30px;border-radius:50%;border:2px solid var(--line);position:relative;flex:none}
+.spool .disc::after{content:"";position:absolute;inset:9px;border-radius:50%;background:var(--surface);border:1px solid var(--line)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:12.5px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.meter{height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.meter > i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .25s linear}
+.sbtns{display:flex;gap:7px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:7px;padding:6px 10px;font-size:12.5px;cursor:pointer}
+.btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent-ink)}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover:not(:disabled){filter:brightness(1.08);color:#fff}
+.btn.danger{border-color:var(--crit);color:var(--crit)}
+.btn.tiny{padding:3px 7px;font-size:11.5px}
+.btn.wide{flex:1;text-align:center}
+
+/* ---------- sub tabs ---------- */
+.subtabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:13px;overflow-x:auto}
+.subtab{border:0;background:none;padding:7px 11px;font-size:13px;color:var(--muted);cursor:pointer;
+  border-bottom:2px solid transparent;white-space:nowrap}
+.subtab.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.subtab .pip{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--crit);margin-left:5px;vertical-align:middle}
+
+/* ---------- status strip ---------- */
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(122px,1fr));gap:8px;margin-bottom:14px}
+.tile{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:8px;padding:8px 10px}
+.tile b{display:block;font-size:13.5px;font-weight:600;margin-top:1px;font-family:var(--mono);
+  font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.tile.sev-ok{border-left:3px solid var(--ok)}
+.tile.sev-warn{border-left:3px solid var(--warn)}
+.tile.sev-crit{border-left:3px solid var(--crit);background:var(--crit-soft)}
+.tile.sev-act{border-left:3px solid var(--accent);background:var(--accent-soft)}
+
+.panel{border:1px solid var(--line-soft);border-radius:9px;background:var(--surface);margin-bottom:13px}
+.panel > header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  padding:8px 11px;border-bottom:1px solid var(--line-soft)}
+.panel > header h3{font-size:13px;font-weight:600}
+.panel .body{padding:11px}
+.hint{font-size:11.5px;color:var(--muted)}
+
+/* ---------- svg blocks ---------- */
+.svgbox{width:100%;overflow-x:auto}
+.svgbox svg{display:block;width:100%;height:auto;min-width:520px}
+text{font-family:var(--sans)}
+.gate-hit{cursor:pointer}
+.gate-hit:hover .gate-plate{stroke:var(--accent)}
+
+/* ---------- tool buttons ---------- */
+.tools{display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:7px}
+.tool{display:flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface);
+  border-radius:7px;padding:6px 8px;cursor:pointer;font-size:12.5px}
+.tool .sw{width:15px;height:15px;border-radius:3px;border:1px solid var(--line);flex:none}
+.tool.on{border-color:var(--accent);background:var(--accent-soft);font-weight:600}
+.tool:disabled{opacity:.45;cursor:not-allowed}
+
+/* ---------- tables ---------- */
+.tblwrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:560px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line-soft);text-align:left;vertical-align:middle}
+th{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;white-space:nowrap}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr.sel td{background:var(--accent-soft)}
+input,select{font:inherit;font-size:12.5px;color:var(--ink);background:var(--surface);border:1px solid var(--line);
+  border-radius:5px;padding:3px 5px}
+input[type=color]{padding:0;width:34px;height:24px;cursor:pointer}
+input.w60{width:62px}
+.chips{display:flex;gap:4px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);border-radius:5px;padding:1px 6px;font-size:11px;font-family:var(--mono)}
+.chip.es{background:var(--accent-soft);border-color:transparent}
+.badge{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:600}
+.badge.ok{background:var(--ok-soft);color:var(--ok)}
+.badge.warn{background:var(--warn-soft);color:var(--warn)}
+.badge.crit{background:var(--crit-soft);color:var(--crit)}
+.badge.mute{background:var(--surface-3);color:var(--muted)}
+.cmd{font-family:var(--mono);font-size:11.5px;background:var(--surface-2);border:1px dashed var(--line);
+  border-radius:6px;padding:7px 9px;color:var(--ink-2);word-break:break-word}
+
+/* ---------- pre-flight ---------- */
+.files{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:11px}
+.file{border:1px solid var(--line);border-radius:7px;background:var(--surface);padding:7px 9px;cursor:pointer;text-align:left}
+.file.on{border-color:var(--accent);background:var(--accent-soft)}
+.file .nm{font-size:12.5px;font-weight:600}
+.file .mt{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.swatches{display:flex;gap:3px;margin-top:5px}
+.swatches i{width:13px;height:13px;border-radius:3px;border:1px solid var(--line);display:block}
+.matrix{border-collapse:collapse;min-width:0;width:auto;font-size:11.5px}
+.matrix td,.matrix th{border:1px solid var(--line-soft);text-align:center;padding:4px 7px;font-family:var(--mono)}
+
+/* ---------- health ---------- */
+.bars{display:grid;gap:5px}
+.bar{display:grid;grid-template-columns:52px 1fr 108px;gap:9px;align-items:center;font-size:12px}
+.bar .track{height:9px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.bar .track > i{display:block;height:100%;border-radius:99px}
+.stack{display:flex;height:22px;border-radius:5px;overflow:hidden;border:1px solid var(--line-soft)}
+.stack > i{display:block}
+.legend{display:flex;gap:11px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:7px}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend i{width:9px;height:9px;border-radius:2px;display:block}
+
+/* ---------- console ---------- */
+.console{font-family:var(--mono);font-size:11.5px;background:var(--surface-2);border:1px solid var(--line-soft);
+  border-radius:7px;padding:9px;height:250px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.ln{white-space:pre-wrap;word-break:break-word;color:var(--ink-2)}
+.ln.err{color:var(--crit)}
+.ln.act{color:var(--accent-ink)}
+.ln .flag{font-family:var(--sans);font-size:10px;font-weight:600;background:var(--ok-soft);color:var(--ok);
+  border-radius:4px;padding:0 5px;margin-left:6px}
+
+/* ---------- recovery ---------- */
+.steps{display:grid;gap:8px}
+.step{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;padding:8px 10px;
+  border:1px solid var(--line-soft);border-radius:7px;background:var(--surface-2)}
+.step.done{opacity:.55}
+.step.now{border-color:var(--accent);background:var(--accent-soft)}
+.step .no{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--surface-3);
+  font-size:11.5px;font-weight:600}
+.step.now .no{background:var(--accent);color:#fff}
+.step p{margin:0;font-size:12.5px}
+.step small{display:block;color:var(--muted);font-size:11px}
+
+/* ---------- modal ---------- */
+.scrim{position:fixed;inset:0;background:rgba(10,18,26,.55);display:grid;place-items:center;padding:16px;z-index:50}
+.scrim[hidden]{display:none}
+.dialog{background:var(--surface);border:1px solid var(--line);border-radius:11px;max-width:460px;width:100%;
+  box-shadow:0 18px 50px rgba(0,0,0,.35);overflow:hidden}
+.dialog header{padding:11px 14px;border-bottom:1px solid var(--line-soft);display:flex;align-items:center;gap:9px}
+.dialog header .mk{width:8px;height:22px;border-radius:3px;background:var(--crit)}
+.dialog header h3{font-size:13.5px}
+.dialog .body{padding:13px 14px;display:grid;gap:7px;font-size:13px}
+.dialog footer{padding:11px 14px;border-top:1px solid var(--line-soft);display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.btn.warnbtn{border-color:var(--warn);color:var(--warn)}
+.dialog .src{font-family:var(--mono);font-size:10.5px;color:var(--muted);padding:0 14px 12px}
+
+/* ---------- sim bar ---------- */
+.simbar{margin-top:16px;border:1px dashed var(--line);border-radius:10px;background:var(--surface-2);padding:11px 13px}
+.simbar h2{font-size:12px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:9px}
+.simrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.simrow label{font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.simstate{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--muted)}
+details.notes{margin-top:13px;border:1px solid var(--line-soft);border-radius:9px;background:var(--surface);padding:10px 13px}
+details.notes summary{cursor:pointer;font-size:12.5px;font-weight:600}
+details.notes div{font-size:12.5px;color:var(--ink-2);display:grid;gap:7px;margin-top:9px}
+details.notes code{font-family:var(--mono);font-size:11.5px;background:var(--surface-2);padding:1px 4px;border-radius:4px}
+
+/* ============================================================
+   Compact layout — the panel as it renders inside this printer's
+   UI Customizer setup (red-night theme, icon-only tabs, fluid layout)
+   ============================================================ */
+body.uic{background:#121213}
+/* re-resolve the inherited text colour inside the app, so a skin's tokens actually apply */
+#app{color:var(--ink)}
+#app[data-skin="uic"]{
+  color:var(--ink);
+  color-scheme:dark;
+  --bg:#1e1e20; --surface:#242424; --surface-2:#2d2d2f; --surface-3:#3e3e3e;
+  --ink:#f7f7f7; --ink-2:#dedede; --muted:#999999; --line:#3e3e3e; --line-soft:#2d2d2f;
+  --accent:#d32f2f; --accent-ink:#f44336; --accent-soft:rgba(211,47,47,.20);
+  --ok:#4caf50; --ok-soft:rgba(76,175,80,.18);
+  --warn:#e0a33e; --warn-soft:rgba(224,163,62,.18);
+  --crit:#f44336; --crit-soft:rgba(244,67,54,.18);
+  --rail:#3e3e3e; --shadow:0 1px 2px rgba(0,0,0,.5);
+}
+#app[data-skin="uic"] .opbar{background:var(--surface-2);border-color:var(--line-soft)}
+#app[data-skin="uic"] .btn.primary{color:#fff}
+#app[data-density="compact"]{font-size:13px}
+#app[data-density="compact"] .opbar{padding:5px 9px;gap:9px}
+#app[data-density="compact"] .shell{grid-template-columns:212px minmax(0,1fr)}
+#app[data-density="compact"] .side{padding:9px 9px;gap:8px}
+#app[data-density="compact"] .main{padding:9px 10px 12px}
+#app[data-density="compact"] .sw-card{padding:8px}
+#app[data-density="compact"] .panel{margin-bottom:8px}
+#app[data-density="compact"] .panel > header{padding:5px 9px}
+#app[data-density="compact"] .panel > header h3{font-size:12px}
+#app[data-density="compact"] .panel .body{padding:8px}
+#app[data-density="compact"] .subtabs{margin-bottom:9px}
+#app[data-density="compact"] .subtab{padding:5px 9px;font-size:12.5px}
+#app[data-density="compact"] .hint{font-size:11px}
+#app[data-density="compact"] .tools{grid-template-columns:repeat(auto-fill,minmax(58px,1fr));gap:5px}
+#app[data-density="compact"] .tool{padding:4px 6px;font-size:12px}
+#app[data-density="compact"] .svgbox svg{min-width:440px}
+#app[data-density="compact"] .console{height:190px}
+#app[data-density="compact"] .kv{font-size:12px}
+@media (max-width:860px){#app[data-density="compact"] .shell{grid-template-columns:minmax(0,1fr)}}
+/* status as one chip row instead of tiles */
+.strip.chiprow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.strip.chiprow .schip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-soft);
+  background:var(--surface-2);border-radius:6px;padding:3px 8px;font-size:12px}
+.strip.chiprow .schip b{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+.strip.chiprow .schip.sev-crit{border-color:var(--crit);background:var(--crit-soft);color:var(--crit)}
+.strip.chiprow .schip.sev-ok{border-color:transparent;background:var(--ok-soft);color:var(--ok)}
+.strip.chiprow .schip.sev-act{border-color:transparent;background:var(--accent-soft);color:var(--accent-ink)}
+/* icon-only tab bar, as UI Customizer renders it here */
+.optab.icon{display:inline-grid;place-items:center;width:30px;height:26px;padding:0}
+.optab.icon svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round}
+.optab.icon.on svg{stroke:var(--accent-ink)}
+</style>
+
+<div class="wrap" id="app" data-skin="stock" data-density="cozy">
+
+  <header class="opbar">
+    <span class="brand"><span class="dot"></span>OctoPrint <small>· VORON V2.4</small></span>
+    <nav class="optabs" id="optabs" aria-hidden="true"></nav>
+    <span id="navchip" class="navchip"><span class="sw" id="navsw"></span><span id="navtxt">T0 → G0</span></span>
+  </header>
+
+  <div class="shell">
+    <aside class="side">
+      <div class="sw-card">
+        <div class="sw-head">
+          <span class="lbl">Happy Hare</span>
+          <span class="badge mute" id="sidestate">ready</span>
+        </div>
+        <div class="spool" style="margin-bottom:10px">
+          <span class="disc" id="sidedisc"></span>
+          <div>
+            <div style="font-weight:600;font-size:13.5px" id="sidetool">Tool 0 · Gate 0</div>
+            <div class="hint" id="sidemat">ABS+ · 260 °C</div>
+          </div>
+        </div>
+        <dl class="kv">
+          <dt>Filament</dt><dd id="sidefil">Loaded</dd>
+          <dt>Position</dt><dd id="sidepos">LOADED</dd>
+          <dt>Action</dt><dd id="sideact">Idle</dd>
+          <dt>Swaps</dt><dd id="sideswaps">156</dd>
+        </dl>
+        <div style="margin-top:9px">
+          <div class="lbl" style="display:flex;justify-content:space-between">
+            <span>Encoder headroom</span><span class="num" id="sidehead">7.4 mm</span>
+          </div>
+          <div class="meter" style="margin-top:4px"><i id="sideheadbar" style="width:70%"></i></div>
+        </div>
+      </div>
+      <div class="sbtns">
+        <button class="btn wide" id="btnUnload">Unload</button>
+        <button class="btn wide" id="btnRecoverSide">Recover</button>
+      </div>
+      <div class="sw-card">
+        <div class="lbl" style="margin-bottom:6px">Transport</div>
+        <div class="hint" style="font-family:var(--mono);font-size:11px;line-height:1.5">
+          klippy.sock<br>~/printer_data/comms/<br>objects/subscribe · 4 Hz
+        </div>
+        <div style="margin-top:7px"><span class="badge ok" id="linkbadge">connected</span></div>
+      </div>
+      <div class="sw-card">
+        <div class="lbl" style="margin-bottom:6px">Protection</div>
+        <div class="hint" id="protecttxt">0 MMU errors intercepted this session</div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <nav class="subtabs" role="tablist">
+        <button class="subtab on" data-view="operate" role="tab">Operate</button>
+        <button class="subtab" data-view="gates" role="tab">Gates &amp; TTG</button>
+        <button class="subtab" data-view="preflight" role="tab">Pre-flight</button>
+        <button class="subtab" data-view="health" role="tab">Health</button>
+        <button class="subtab" data-view="console" role="tab">Console</button>
+      </nav>
+
+      <!-- ============ OPERATE ============ -->
+      <section id="view-operate">
+        <div class="strip" id="strip"></div>
+
+        <div class="panel" id="recoverPanel" hidden>
+          <header>
+            <h3 style="color:var(--crit)">MMU paused — recovery</h3>
+            <span class="badge crit" id="recReason">reason</span>
+          </header>
+          <div class="body">
+            <div class="steps" id="recSteps"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <header>
+            <h3 id="railTitle">Selector — ERCF 2.0, 12 gates</h3>
+            <span class="hint" id="railHint">servo down · homed</span>
+          </header>
+          <div class="body">
+            <div class="svgbox" id="railBox"></div>
+            <div class="hint" style="margin-top:7px">Click a gate for actions. Ring colour is gate status; the badge under each spool is the tool mapped to it.</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <header>
+            <h3>Filament path</h3>
+            <span class="hint" id="pathHint">bowden 1016.4 mm</span>
+          </header>
+          <div class="body"><div class="svgbox" id="pathBox"></div></div>
+        </div>
+
+        <div class="panel">
+          <header><h3>Tools</h3><span class="hint">Sends <span class="num">MMU_CHANGE_TOOL TOOL=n</span></span></header>
+          <div class="body"><div class="tools" id="tools"></div></div>
+        </div>
+      </section>
+
+      <!-- ============ GATES ============ -->
+      <section id="view-gates" hidden>
+        <div class="panel">
+          <header>
+            <h3>Gate map</h3>
+            <span class="hint">Edits are staged, then sent as one command per gate</span>
+          </header>
+          <div class="body">
+            <div class="tblwrap"><table id="gateTable"></table></div>
+            <div style="margin-top:10px" class="lbl">Command preview</div>
+            <div class="cmd" id="gateCmd" style="margin-top:5px">Edit a row to see the command Happy Hare would receive.</div>
+          </div>
+        </div>
+        <div class="panel">
+          <header>
+            <h3>Tool → gate &amp; EndlessSpool</h3>
+            <span class="hint">MMU_TTG_MAP · MMU_ENDLESS_SPOOL</span>
+          </header>
+          <div class="body">
+            <div class="tblwrap"><table id="ttgTable"></table></div>
+            <div class="cmd" id="ttgCmd" style="margin-top:10px"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ PRE-FLIGHT ============ -->
+      <section id="view-preflight" hidden>
+        <div class="panel">
+          <header>
+            <h3>Pre-flight check</h3>
+            <span class="hint">From placeholders substituted at upload</span>
+          </header>
+          <div class="body">
+            <div class="files" id="files"></div>
+            <div id="preflightOut"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ HEALTH ============ -->
+      <section id="view-health" hidden>
+        <div class="panel">
+          <header><h3>Gate reliability</h3><span class="hint">save_variables · mmu_statistics_gate_N</span></header>
+          <div class="body"><div class="bars" id="qualityBars"></div></div>
+        </div>
+        <div class="panel">
+          <header><h3>Maintenance counters</h3><span class="hint">MMU_STATS SHOWCOUNTS</span></header>
+          <div class="body"><div class="bars" id="counterBars"></div></div>
+        </div>
+        <div class="panel">
+          <header><h3>Where swap time goes</h3><span class="hint" id="swapTotal"></span></header>
+          <div class="body">
+            <div class="stack" id="swapStack"></div>
+            <div class="legend" id="swapLegend"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ CONSOLE ============ -->
+      <section id="view-console" hidden>
+        <div class="panel">
+          <header>
+            <h3>Happy Hare console</h3>
+            <label class="hint" style="display:inline-flex;gap:6px;align-items:center">
+              <input type="checkbox" id="rawToggle"> show raw prefixes
+            </label>
+          </header>
+          <div class="body"><div class="console" id="console"></div></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <section class="simbar">
+    <h2>Mockup controls — not part of the plugin</h2>
+    <div class="simrow">
+      <button class="btn primary" data-sim="toolchange">Tool change T0 → T2</button>
+      <button class="btn" data-sim="failure">Load failure &amp; recovery</button>
+      <button class="btn" data-sim="runout">Runout → EndlessSpool</button>
+      <button class="btn" data-sim="preflight">Pre-flight warning</button>
+      <button class="btn" data-sim="reset">Reset</button>
+      <label>Speed
+        <select id="speed"><option value="2">0.5×</option><option value="1" selected>1×</option>
+          <option value="0.5">2×</option><option value="0.25">4×</option></select>
+      </label>
+      <label>Hardware
+        <select id="hw">
+          <option value="ercf" selected>ERCF 2.0 · 12 gates (this printer)</option>
+          <option value="type_b">Box Turtle · 4 lanes (type-B)</option>
+        </select>
+      </label>
+      <label>Layout
+        <select id="layout">
+          <option value="stock" selected>Stock OctoPrint</option>
+          <option value="uic">Compact · UI Customizer (red-night)</option>
+        </select>
+      </label>
+      <span class="simstate" id="simstate">idle</span>
+    </div>
+  </section>
+
+  <details class="notes">
+    <summary>What's real here, and what's simulated</summary>
+    <div>
+      <p><b>Real:</b> the gate map, materials, colours, EndlessSpool groups, selector offsets, bowden length, per-gate statistics and maintenance counters all come from this printer's <code>mmu_vars.cfg</code>. The state fields, enums and G-code shown are Happy Hare's own (<code>filament_pos</code> 0–10, <code>gate_status</code> −1/0/1/2, <code>MMU_GATE_MAP</code>, <code>MMU_TTG_MAP</code>). The error dialog is rendered from the exact <code>action:prompt_*</code> lines <code>_MMU_ERROR_DIALOG</code> emits.</p>
+      <p><b>Simulated:</b> everything moves on a scripted timeline in the browser. No printer is connected, no G-code is sent, and the plugin itself does not exist yet.</p>
+      <p><b>Compact layout:</b> the second layout option redraws the panel the way it would appear in this printer's own UI Customizer setup — the red-night palette (<code>--accent #d32f2f</code> on <code>#1e1e20</code>), icon-only tabs, fluid layout and a tighter density. The real plugin would take those colours from the theme's CSS variables rather than hard-coding them, and switch density from <code>body.UICResponsiveMode</code> and its own container width.</p>
+      <p><b>The point:</b> on this machine an MMU error currently cancels the print, because OctoPrint treats Happy Hare's <code>!!</code> line as a firmware error, and Happy Hare's recovery dialog is never shown. The failure scenario shows what the plugin would do instead.</p>
+    </div>
+  </details>
+</div>
+
+<div class="scrim" id="scrim" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <header><span class="mk"></span><h3 id="dlgTitle">Happy Hare Error Notice</h3></header>
+    <div class="body" id="dlgBody"></div>
+    <footer id="dlgFoot"></footer>
+    <div class="src">rendered from // action:prompt_begin … prompt_button UNLOCK|MMU_UNLOCK|secondary … prompt_show</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ============================================================
+   Seed data — from printer_data/config/mmu/mmu_vars.cfg
+   ============================================================ */
+const SEED = {
+  num_gates: 12,
+  vendor: "ERCF", version: "2.0", selector_type: "LinearServoSelector",
+  selector_offsets: [3.2,26.0,48.7,71.5,94.3,117.0,139.8,162.5,185.3,208.1,230.8,253.6],
+  bypass_offset: 267.27,
+  bowden_length: 1016.4,
+  gate_color:   ["000000","000000","ffffff","ffffff","000000","000000","ff0000","808080","","","",""],
+  gate_material:["ABS+","ABS+","ABS+","ABS+","ABS","ABS","ABS+","ABS+","ABS+","ABS+","ABS+","ABS+"],
+  gate_status:  [1,0,2,-1,2,2,2,2,-1,-1,-1,-1],
+  gate_temperature:[260,260,260,265,265,265,260,260,265,265,265,265],
+  endless_spool_groups:[1,1,2,2,3,4,5,6,7,8,9,10],
+  gate_spool_id:[-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1],
+  gate_speed_override:[100,100,100,100,100,100,100,100,100,100,100,100],
+  ttg_map:[0,1,2,3,4,5,6,7,8,9,10,11],
+  stats_gate:[
+    {loads:108,unloads:127,load_failures:26,unload_failures:34,pauses:14,quality:0.864},
+    {loads:8,unloads:15,load_failures:3,unload_failures:8,pauses:0,quality:1.084},
+    {loads:47,unloads:45,load_failures:7,unload_failures:2,pauses:3,quality:1.002},
+    {loads:0,unloads:0,load_failures:0,unload_failures:0,pauses:0,quality:-1},
+    {loads:21,unloads:20,load_failures:1,unload_failures:1,pauses:1,quality:0.984},
+    {loads:2,unloads:1,load_failures:1,unload_failures:0,pauses:0,quality:0.959},
+    {loads:14,unloads:9,load_failures:7,unload_failures:0,pauses:3,quality:0.663},
+    {loads:4,unloads:2,load_failures:3,unload_failures:0,pauses:0,quality:0.554},
+    {loads:0,unloads:0,load_failures:0,unload_failures:0,pauses:0,quality:-1},
+    {loads:0,unloads:0,load_failures:0,unload_failures:0,pauses:0,quality:-1},
+    {loads:0,unloads:0,load_failures:0,unload_failures:0,pauses:0,quality:-1},
+    {loads:0,unloads:0,load_failures:0,unload_failures:0,pauses:0,quality:1.010}
+  ],
+  counters:[
+    {name:"servo_down", count:1048, limit:5000, warning:"Inspect servo arm for wear/damage"},
+    {name:"cutter_blade", count:0, limit:3000, warning:"Inspect/replace filament cutting blade"},
+    {name:"mmu_restarts", count:203, limit:-1, warning:""}
+  ],
+  swaps:{pre_unload:108.74,form_tip:3190.59,unload:11262.27,post_unload:391.71,pre_load:100.19,
+         load:15958.55,purge:4939.18,post_load:365.15,total:26289.9,total_swaps:156,total_pauses:21,pause:9774.18},
+  blobs:40
+};
+const TYPE_B = {
+  num_gates:4, vendor:"BoxTurtle", version:"1.0", selector_type:"VirtualSelector",
+  gate_color:["1f8a4c","d94f2b","efefef","1b1b1b"], gate_material:["PLA","PLA","PETG","PLA"],
+  gate_status:[2,1,1,0], gate_temperature:[215,215,240,215], endless_spool_groups:[1,1,2,3],
+  ttg_map:[0,1,2,3], bowden_length:780
+};
+const POS_NAME = {"-1":"UNKNOWN",0:"UNLOADED AND PARKED",1:"HOMED AT GATE",2:"START OF BOWDEN",3:"IN BOWDEN",
+  4:"END OF BOWDEN",5:"HOMED AT EXTRUDER SENSOR",6:"AT EXTRUDER GEAR",7:"PAST EXTRUDER GEAR",
+  8:"HOMED AT TOOLHEAD SENSOR",9:"IN EXTRUDER",10:"LOADED"};
+const STATUS_TXT = {"-1":"Unknown",0:"Empty",1:"On spool",2:"Buffered"};
+
+/* ============================================================
+   State
+   ============================================================ */
+let hw = "ercf";
+let layout = "stock";           // "stock" | "uic" (compact, themed like this printer's UI Customizer)
+const compact = () => layout === "uic";
+let S, ui, sim;
+
+/* Fake OctoPrint tab bar: labels in stock mode, icon-only in UI Customizer mode */
+const TAB_ICONS = {
+  temp:"M9 2.5a2 2 0 0 1 4 0v6.2a4 4 0 1 1-4 0Z",
+  control:"M4 8h5M6.5 5.5v5M14 8h.01M16.5 10h.01M2.5 6.5h10a3 3 0 0 1 0 9h-10a3 3 0 0 1 0-9Z",
+  gcode:"M10 2.5 2.5 6.5 10 10.5l7.5-4ZM2.5 10.5 10 14.5l7.5-4",
+  term:"M3 3.5h14v13H3zM6 8l2.5 2L6 12m5 .5h3",
+  mmu:"M10 4.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11Zm0 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z"
+};
+function renderTabBar(){
+  const bar = $("#optabs");
+  bar.textContent = "";
+  const tabs = [["temp","Temperature"],["control","Control"],["gcode","GCode Viewer"],
+    ["term","Terminal"],["mmu","MMU"]];
+  tabs.forEach(([key,label],i) => {
+    const on = i === tabs.length - 1;
+    if(compact()){
+      const ic = svg("svg", {viewBox:"0 0 20 20"}, [svg("path", {d:TAB_ICONS[key]})]);
+      bar.appendChild(el("span", {class:"optab icon" + (on ? " on" : ""), title:label}, [ic]));
+    }else{
+      bar.appendChild(el("span", {class:"optab" + (on ? " on" : "")}, [label]));
+    }
+  });
+}
+function applyLayout(){
+  const app = $("#app");
+  app.dataset.skin = compact() ? "uic" : "stock";
+  app.dataset.density = compact() ? "compact" : "cozy";
+  document.body.classList.toggle("uic", compact());
+  railCache = null;
+  renderTabBar();
+  render();
+}
+
+function hwData(){
+  if(hw === "type_b"){
+    return Object.assign({}, SEED, TYPE_B, {selector_offsets:null, bypass_offset:null,
+      stats_gate:SEED.stats_gate.slice(0,4)});
+  }
+  return SEED;
+}
+function freshState(){
+  const d = hwData();
+  return {
+    d,
+    enabled:true, is_homed:true, print_state:"ready", action:"Idle", operation:"",
+    tool:0, gate:0, next_tool:-1, last_tool:0, filament:"Loaded", filament_pos:10,
+    filament_direction:0, bowden_progress:-1, num_toolchanges:d.swaps ? SEED.swaps.total_swaps : 0,
+    reason_for_pause:"", sync_drive:false, servo:"Down",
+    gate_status:d.gate_status.slice(), gate_color:d.gate_color.slice(),
+    gate_material:d.gate_material.slice(), gate_temperature:d.gate_temperature.slice(),
+    endless_spool_groups:d.endless_spool_groups.slice(), ttg_map:d.ttg_map.slice(),
+    gate_spool_id:(d.gate_spool_id||d.gate_color.map(()=>-1)).slice(),
+    gate_speed_override:(d.gate_speed_override||d.gate_color.map(()=>100)).slice(),
+    sensors:{extruder:true, toolhead:true},
+    encoder:{headroom:7.4, desired_headroom:5.0, flow_rate:100, encoder_pos:0},
+    blobs:SEED.blobs, errorsBlocked:0, prompt:null, recovery:null
+  };
+}
+function freshUi(){
+  return { view:"operate", selectedGate:null, preflightFile:0, raw:false, log:[] };
+}
+
+/* ============================================================
+   Helpers
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const el = (t,a,kids) => {
+  const n = document.createElement(t);
+  if(a) for(const k in a){
+    if(k === "class") n.className = a[k];
+    else if(k === "html") n.innerHTML = a[k];
+    else if(k.startsWith("on")) n.addEventListener(k.slice(2), a[k]);
+    else if(a[k] !== null && a[k] !== undefined) n.setAttribute(k, a[k]);
+  }
+  (kids||[]).forEach(c => n.appendChild(typeof c === "string" ? document.createTextNode(c) : c));
+  return n;
+};
+const svg = (t,a,kids) => {
+  const n = document.createElementNS("http://www.w3.org/2000/svg", t);
+  if(a) for(const k in a) if(a[k] !== null && a[k] !== undefined) n.setAttribute(k, a[k]);
+  (kids||[]).forEach(c => n.appendChild(c));
+  return n;
+};
+function gateFill(i){
+  const c = S.gate_color[i];
+  if(!c) return "var(--surface-3)";
+  return "#" + c.replace(/^#/, "").slice(0,6);
+}
+function gateIsDark(i){
+  const c = (S.gate_color[i]||"").replace(/^#/,"").slice(0,6);
+  if(c.length < 6) return false;
+  const r = parseInt(c.slice(0,2),16), g = parseInt(c.slice(2,4),16), b = parseInt(c.slice(4,6),16);
+  return (0.299*r + 0.587*g + 0.114*b) < 110;
+}
+function statusColor(st){
+  return st === 2 ? "var(--accent)" : st === 1 ? "var(--ok)" : st === 0 ? "var(--crit)" : "var(--warn)";
+}
+const esLetter = g => String.fromCharCode(64 + g);
+const toolsForGate = g => S.ttg_map.map((gg,t) => gg === g ? t : -1).filter(t => t >= 0);
+
+/* ============================================================
+   Console
+   ============================================================ */
+function log(text, kind){
+  ui.log.push({text, kind:kind||"info"});
+  if(ui.log.length > 300) ui.log.shift();
+  renderConsole();
+}
+function renderConsole(){
+  const box = $("#console");
+  box.textContent = "";
+  ui.log.forEach(l => {
+    const prefix = l.kind === "err" ? "!! " : "// ";
+    const line = el("div", {class:"ln " + (l.kind === "err" ? "err" : l.kind === "act" ? "act" : "")},
+      [(ui.raw ? prefix : "") + l.text]);
+    if(l.kind === "err") line.appendChild(el("span", {class:"flag"}, ["blocked — print protected"]));
+    box.appendChild(line);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+
+/* ============================================================
+   Renderers
+   ============================================================ */
+function render(){
+  renderNav(); renderSide(); renderStrip(); renderRail(); renderPath(); renderTools();
+  renderRecovery(); renderPrompt(); updateGateTable();
+  const gatesView = document.getElementById("view-gates");
+  if(!gatesView.hidden && !gatesView.contains(document.activeElement)) renderTtg();
+}
+
+function renderNav(){
+  const chip = $("#navchip"), sw = $("#navsw");
+  const paused = S.print_state === "pause_locked" || S.print_state === "paused";
+  chip.className = "navchip" + (paused ? " alarm" : "");
+  sw.style.background = S.gate >= 0 ? gateFill(S.gate) : "var(--surface-3)";
+  const busy = S.action !== "Idle";
+  $("#navtxt").textContent = paused ? "MMU paused — recover"
+    : busy ? S.action + " · T" + Math.max(S.tool,0)
+    : "T" + Math.max(S.tool,0) + " → G" + Math.max(S.gate,0);
+}
+
+function renderSide(){
+  const g = S.gate;
+  $("#sidedisc").style.background = g >= 0 ? gateFill(g) : "var(--surface-3)";
+  $("#sidetool").textContent = "Tool " + Math.max(S.tool,0) + " · Gate " + Math.max(g,0);
+  $("#sidemat").textContent = g >= 0 ? (S.gate_material[g] + " · " + S.gate_temperature[g] + " °C") : "—";
+  $("#sidefil").textContent = S.filament;
+  $("#sidepos").textContent = POS_NAME[S.filament_pos] || "UNKNOWN";
+  $("#sideact").textContent = S.action;
+  $("#sideswaps").textContent = S.num_toolchanges;
+  const st = $("#sidestate");
+  st.textContent = S.print_state;
+  st.className = "badge " + (S.print_state === "pause_locked" ? "crit"
+    : S.print_state === "paused" ? "warn"
+    : S.print_state === "printing" ? "ok" : "mute");
+  $("#sidehead").textContent = S.encoder.headroom.toFixed(1) + " mm";
+  const pct = Math.max(0, Math.min(100, (S.encoder.headroom / 10.3) * 100));
+  const bar = $("#sideheadbar");
+  bar.style.width = pct + "%";
+  bar.style.background = S.encoder.headroom < S.encoder.desired_headroom ? "var(--warn)" : "var(--ok)";
+  $("#protecttxt").textContent = S.errorsBlocked + " MMU error" + (S.errorsBlocked === 1 ? "" : "s")
+    + " intercepted this session";
+  const busy = S.action !== "Idle" || S.print_state === "printing";
+  $("#btnUnload").disabled = busy;
+  $("#btnRecoverSide").disabled = !(S.print_state === "pause_locked" || S.print_state === "paused");
+}
+
+function renderStrip(){
+  const g = S.gate;
+  const tiles = [
+    ["Print state", S.print_state, S.print_state === "pause_locked" ? "crit"
+      : S.print_state === "printing" ? "ok" : ""],
+    ["Action", S.action, S.action === "Idle" ? "" : "act"],
+    ["Tool → gate", (S.tool < 0 ? "—" : "T" + S.tool) + " → " + (g < 0 ? "—" : "G" + g), ""],
+    ["Filament", S.filament, S.filament === "Loaded" ? "ok" : S.filament === "Unknown" ? "warn" : ""],
+    ["Position", POS_NAME[S.filament_pos] || "UNKNOWN", ""],
+    ["Encoder flow", S.encoder.flow_rate + " %", S.encoder.flow_rate < 80 ? "warn" : ""],
+    ["Selector", S.d.selector_type === "VirtualSelector" ? "virtual" : ("servo " + S.servo.toLowerCase()), ""],
+    ["Toolchanges", String(S.num_toolchanges), ""]
+  ];
+  const strip = $("#strip");
+  strip.textContent = "";
+  strip.className = compact() ? "strip chiprow" : "strip";
+  if(compact()){
+    tiles.forEach(([k,v,sev]) => {
+      strip.appendChild(el("span", {class:"schip" + (sev ? " sev-" + sev : "")}, [
+        el("span", {class:"lbl"}, [k]), el("b", {}, [String(v)])
+      ]));
+    });
+    return;
+  }
+  tiles.forEach(([k,v,sev]) => {
+    strip.appendChild(el("div", {class:"tile" + (sev ? " sev-" + sev : "")}, [
+      el("span", {class:"lbl"}, [k]), el("b", {}, [String(v)])
+    ]));
+  });
+}
+
+/* ---------- selector rail / lanes ---------- */
+let railCache = null;
+function railSignature(){
+  return [hw, layout, S.d.num_gates, S.gate_color.join("|"), S.gate_status.join("|"),
+    S.gate_material.join("|"), S.ttg_map.join("|"), S.endless_spool_groups.join("|")].join("#");
+}
+function renderRail(){
+  const sig = railSignature();
+  if(railCache && railCache.sig === sig){ updateRail(); return; }
+  buildRail(sig);
+  updateRail();
+}
+function updateRail(){
+  if(!railCache) return;
+  $("#railHint").textContent = S.d.selector_type === "VirtualSelector"
+    ? "one gear per lane · no selector"
+    : "servo " + S.servo.toLowerCase() + " · " + (S.is_homed ? "homed" : "not homed");
+  railCache.plates.forEach((p, i) => {
+    const sel = i === S.gate;
+    p.setAttribute("fill", sel ? "var(--accent-soft)" : "var(--surface-2)");
+    p.setAttribute("stroke", sel ? "var(--accent)" : "var(--line-soft)");
+    p.setAttribute("stroke-width", sel ? 2 : 1);
+  });
+  if(railCache.carriage){
+    const target = S.gate >= 0 ? railCache.gx(S.gate)
+      : (S.gate === -2 ? railCache.bypassX : railCache.gx(0));
+    railCache.carriage.style.transform = "translateX(" + (target - railCache.baseX) + "px)";
+    railCache.servoLabel.textContent = S.servo === "Down" ? "GRIP" : S.servo === "Move" ? "MOVE" : "UP";
+  }
+}
+function buildRail(sig){
+  const box = $("#railBox");
+  box.textContent = "";
+  $("#railTitle").textContent = "Selector — " + S.d.vendor + " " + S.d.version + ", " + S.d.num_gates
+    + (S.d.selector_type === "VirtualSelector" ? " lanes" : " gates");
+
+  const n = S.d.num_gates;
+  const hasRail = S.d.selector_type !== "VirtualSelector";
+  // two densities: roomy for stock OctoPrint, tight for the UI Customizer layout
+  const M = compact()
+    ? {yDisc:42, plateY:-24, plateH:64, plateW:42, r:14, inner:5, num:-15, tool:24, mat:null,
+       railY:28, carApex:36, carRectY:46, carH:19, carText:59, cut:10, gnum:10, tnum:9.5}
+    : {yDisc:58, plateY:-34, plateH:96, plateW:54, r:20, inner:6.5, num:-24, tool:40, mat:55,
+       railY:44, carApex:58, carRectY:72, carH:24, carText:88, cut:14, gnum:11.5, tnum:11};
+  const W = 1000, H = M.yDisc + (hasRail ? M.carText + 14 : M.tool + 34);
+  const root = svg("svg", {viewBox:"0 0 " + W + " " + H, role:"img",
+    "aria-label":"Gate status for " + n + " gates"});
+
+  const off = S.d.selector_offsets;
+  const span = hasRail ? (S.d.bypass_offset - off[0]) : 0;
+  const x0 = 62, x1 = W - 56;
+  const gx = i => hasRail ? x0 + ((off[i] - off[0]) / span) * (x1 - x0)
+                          : x0 + (i + .5) * ((x1 - x0) / n);
+  const bypassX = hasRail ? x1 : null;
+  const yDisc = M.yDisc;
+
+  if(hasRail){
+    root.appendChild(svg("rect", {x:x0-28, y:yDisc+M.railY, width:(x1-x0)+56, height:7, rx:3.5,
+      fill:"var(--rail)"}));
+  }
+
+  const plates = [];
+  for(let i = 0; i < n; i++){
+    const x = gx(i), col = gateFill(i), st = S.gate_status[i];
+    const grp = svg("g", {class:"gate-hit", tabindex:"0", role:"button",
+      "aria-label":"Gate " + i + " " + STATUS_TXT[st]});
+    grp.addEventListener("click", () => openGate(i));
+    grp.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openGate(i); } });
+
+    const plate = svg("rect", {class:"gate-plate", x:x-M.plateW/2, y:yDisc+M.plateY,
+      width:M.plateW, height:M.plateH, rx:9,
+      fill:"var(--surface-2)", stroke:"var(--line-soft)", "stroke-width":1});
+    plates.push(plate);
+    grp.appendChild(plate);
+    // spool — a light halo keeps black filament visible on a dark theme
+    grp.appendChild(svg("circle", {cx:x, cy:yDisc, r:M.r + 1.5, fill:"none",
+      stroke:"var(--line)", "stroke-width":1}));
+    grp.appendChild(svg("circle", {cx:x, cy:yDisc, r:M.r, fill:col,
+      stroke:statusColor(st), "stroke-width":3}));
+    grp.appendChild(svg("circle", {cx:x, cy:yDisc, r:M.inner, fill:"var(--surface)",
+      stroke:"var(--line)", "stroke-width":1}));
+    if(st === 0){
+      grp.appendChild(svg("line", {x1:x-M.cut, y1:yDisc+M.cut, x2:x+M.cut, y2:yDisc-M.cut,
+        stroke:"var(--crit)", "stroke-width":2.5, "stroke-linecap":"round"}));
+    }else if(st === -1){
+      const q = svg("text", {x:x, y:yDisc + M.r*0.3, "text-anchor":"middle",
+        "font-size":String(M.r * .85), "font-weight":"600",
+        fill:gateIsDark(i) ? "#fff" : "var(--warn)"});
+      q.textContent = "?";
+      grp.appendChild(q);
+    }
+    // gate number
+    const numT = svg("text", {x:x, y:yDisc+M.num, "text-anchor":"middle", "font-size":String(M.gnum),
+      "font-weight":"600", fill:"var(--ink)"});
+    numT.textContent = (hasRail ? "G" : "L") + i;
+    grp.appendChild(numT);
+    // es group
+    const es = svg("text", {x:x+M.r, y:yDisc+M.num, "text-anchor":"middle", "font-size":"10",
+      fill:"var(--accent-ink)", "font-weight":"600"});
+    es.textContent = esLetter(S.endless_spool_groups[i]);
+    grp.appendChild(es);
+    // tool badge
+    const tl = toolsForGate(i);
+    const tt = svg("text", {x:x, y:yDisc+M.tool, "text-anchor":"middle", "font-size":String(M.tnum),
+      fill:"var(--muted)", "font-family":"IBM Plex Mono, monospace"});
+    tt.textContent = tl.length ? tl.map(t => "T" + t).join(",") : "—";
+    grp.appendChild(tt);
+    // material — dropped in the compact layout
+    if(M.mat !== null){
+      const mt = svg("text", {x:x, y:yDisc+M.mat, "text-anchor":"middle", "font-size":"9.5",
+        fill:"var(--muted)"});
+      mt.textContent = S.gate_material[i];
+      grp.appendChild(mt);
+    }
+    grp.appendChild(svg("title", {}, []));
+    grp.lastChild.textContent = "Gate " + i + " · " + S.gate_material[i] + " · "
+      + STATUS_TXT[S.gate_status[i]] + " · " + S.gate_temperature[i] + "°C";
+    root.appendChild(grp);
+  }
+
+  if(hasRail){
+    // bypass slot
+    const bp = svg("g", {});
+    bp.appendChild(svg("rect", {x:bypassX-M.plateW/2.4, y:yDisc+M.plateY, width:M.plateW/1.2,
+      height:M.plateH, rx:9, fill:"var(--surface-2)", stroke:"var(--line-soft)", "stroke-dasharray":"4 3"}));
+    const bt = svg("text", {x:bypassX, y:yDisc+4, "text-anchor":"middle", "font-size":"10.5",
+      fill:"var(--muted)"});
+    bt.textContent = "BYPASS";
+    bp.appendChild(bt);
+    root.appendChild(bp);
+
+    // carriage — drawn at gate 0 and moved with a CSS transform so it slides between gates
+    const cx = gx(0);
+    const car = svg("g", {id:"carriage"});
+    car.appendChild(svg("path", {d:"M" + (cx-15) + " " + (yDisc+M.carRectY) + " L" + cx + " "
+      + (yDisc+M.carApex) + " L" + (cx+15) + " " + (yDisc+M.carRectY) + " Z", fill:"var(--accent)"}));
+    car.appendChild(svg("rect", {x:cx-26, y:yDisc+M.carRectY, width:52, height:M.carH, rx:6,
+      fill:"var(--accent)", opacity:".92"}));
+    const servoLabel = svg("text", {x:cx, y:yDisc+M.carText, "text-anchor":"middle", "font-size":"11",
+      fill:"#fff", "font-weight":"600"});
+    car.appendChild(servoLabel);
+    if(!window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+      car.style.transition = "transform .5s cubic-bezier(.4,0,.2,1)";
+    }
+    root.appendChild(car);
+    railCache = {sig, plates, gx, bypassX, baseX:cx, carriage:car, servoLabel};
+  }
+  if(!hasRail) railCache = {sig, plates, gx, bypassX:null, baseX:0, carriage:null, servoLabel:null};
+  box.appendChild(root);
+}
+
+/* ---------- filament path ---------- */
+const PATH_X = {gate:56, encoder:150, bstart:205, bend:600, entry:672, gears:740, ts:826, nozzle:944};
+function pathFillX(){
+  const p = S.filament_pos, X = PATH_X;
+  if(p <= 0) return X.gate;
+  if(p === 1) return X.encoder;
+  if(p === 2) return X.bstart;
+  if(p === 3){
+    const f = S.bowden_progress >= 0 ? S.bowden_progress / 100 : .5;
+    return X.bstart + (X.bend - X.bstart) * f;
+  }
+  if(p === 4) return X.bend;
+  if(p === 5) return X.entry;
+  if(p === 6) return X.gears - 14;
+  if(p === 7) return X.gears + 18;
+  if(p === 8) return X.ts;
+  if(p === 9) return X.ts + 52;
+  return X.nozzle;
+}
+function renderPath(){
+  const box = $("#pathBox");
+  box.textContent = "";
+  const cp = compact();
+  const X = PATH_X, y = cp ? 48 : 72, W = 1000, H = cp ? 104 : 150;
+  const root = svg("svg", {viewBox:"0 0 " + W + " " + H, role:"img", "aria-label":"Filament path"});
+  $("#pathHint").textContent = "bowden " + S.d.bowden_length + " mm"
+    + (S.bowden_progress >= 0 ? " · " + S.bowden_progress + "%" : "");
+
+  // track
+  root.appendChild(svg("rect", {x:X.gate-14, y:y-13, width:(X.nozzle-X.gate)+30, height:26, rx:13,
+    fill:"var(--surface-2)", stroke:"var(--line-soft)"}));
+  // bowden zone
+  root.appendChild(svg("rect", {x:X.bstart, y:y-13, width:X.bend-X.bstart, height:26,
+    fill:"var(--surface-3)", opacity:".75"}));
+
+  // filament
+  const fx = pathFillX();
+  const known = S.filament_pos >= 0;
+  if(known && fx > X.gate){
+    root.appendChild(svg("line", {x1:X.gate, y1:y, x2:fx, y2:y,
+      stroke:S.gate >= 0 ? gateFill(S.gate) : "var(--muted)", "stroke-width":13, "stroke-linecap":"round",
+      "stroke-opacity": gateIsDark(S.gate) ? .92 : 1}));
+  }
+  if(!known){
+    const t = svg("text", {x:(X.gate+X.bend)/2, y:y+5, "text-anchor":"middle", "font-size":"13",
+      fill:"var(--warn)", "font-weight":"600"});
+    t.textContent = "filament position unknown";
+    root.appendChild(t);
+  }
+  // direction arrow
+  if(S.filament_direction !== 0 && known){
+    const dir = S.filament_direction, ax = Math.min(Math.max(fx, X.gate + 30), X.nozzle - 10);
+    root.appendChild(svg("path", {d:"M" + ax + " " + (y-26) + " l" + (14*dir) + " 9 l" + (-14*dir) + " 9 Z",
+      fill:"var(--accent)"}));
+  }
+
+  const mark = (x, label, sub) => {
+    root.appendChild(svg("line", {x1:x, y1:y+16, x2:x, y2:y+27, stroke:"var(--line)"}));
+    const t1 = svg("text", {x:x, y:y+42, "text-anchor":"middle", "font-size":"10.5", fill:"var(--ink-2)"});
+    t1.textContent = label;
+    root.appendChild(t1);
+    if(sub && !cp){
+      const t2 = svg("text", {x:x, y:y+56, "text-anchor":"middle", "font-size":"9.5", fill:"var(--muted)"});
+      t2.textContent = sub;
+      root.appendChild(t2);
+    }
+  };
+  const sensor = (x, on, label) => {
+    root.appendChild(svg("circle", {cx:x, cy:y-30, r:8,
+      fill:on ? "var(--ok)" : "var(--surface)", stroke:on ? "var(--ok)" : "var(--line)", "stroke-width":2}));
+    const t = svg("text", {x:x, y:y-44, "text-anchor":"middle", "font-size":"9.5",
+      fill:on ? "var(--ok)" : "var(--muted)"});
+    t.textContent = label;
+    root.appendChild(t);
+  };
+
+  // gate block
+  root.appendChild(svg("rect", {x:X.gate-32, y:y-30, width:34, height:60, rx:7,
+    fill:"var(--surface-2)", stroke:"var(--line)"}));
+  const gt = svg("text", {x:X.gate-15, y:y+4, "text-anchor":"middle", "font-size":"11",
+    "font-weight":"600", fill:"var(--ink)"});
+  gt.textContent = S.gate >= 0 ? "G" + S.gate : "—";
+  root.appendChild(gt);
+  mark(X.gate, "gate", "park");
+
+  // encoder
+  root.appendChild(svg("circle", {cx:X.encoder, cy:y, r:16, fill:"none",
+    stroke:"var(--accent)", "stroke-width":2.5, "stroke-dasharray":"5 4"}));
+  mark(X.encoder, "encoder", S.encoder.flow_rate + "% flow");
+
+  mark((X.bstart + X.bend) / 2, "bowden", S.d.bowden_length + " mm");
+  if(S.bowden_progress >= 0){
+    root.appendChild(svg("rect", {x:X.bstart, y:y+20, width:(X.bend-X.bstart), height:5, rx:2.5,
+      fill:"var(--surface-3)"}));
+    root.appendChild(svg("rect", {x:X.bstart, y:y+20, width:(X.bend-X.bstart) * (S.bowden_progress/100),
+      height:5, rx:2.5, fill:"var(--accent)"}));
+  }
+
+  sensor(X.entry, !!S.sensors.extruder, "extruder");
+  mark(X.entry, "entry sw", null);
+
+  // extruder gears
+  [-1,1].forEach(s => {
+    root.appendChild(svg("circle", {cx:X.gears, cy:y + s*21, r:13, fill:"var(--surface-2)",
+      stroke:"var(--ink-2)", "stroke-width":2}));
+    root.appendChild(svg("circle", {cx:X.gears, cy:y + s*21, r:5, fill:"var(--ink-2)"}));
+  });
+  mark(X.gears, "extruder", S.sync_drive ? "synced" : null);
+
+  sensor(X.ts, !!S.sensors.toolhead, "toolhead");
+  mark(X.ts, "toolhead sw", null);
+
+  // nozzle
+  root.appendChild(svg("path", {d:"M" + (X.nozzle-16) + " " + (y-20) + " h32 l-10 26 h-12 Z",
+    fill:"var(--surface-2)", stroke:"var(--ink-2)", "stroke-width":2}));
+  mark(X.nozzle, "nozzle", null);
+
+  box.appendChild(root);
+}
+
+function renderTools(){
+  const box = $("#tools");
+  box.textContent = "";
+  const busy = S.action !== "Idle" || S.print_state === "pause_locked";
+  for(let t = 0; t < S.d.num_gates; t++){
+    const g = S.ttg_map[t];
+    const b = el("button", {class:"tool" + (t === S.tool ? " on" : ""), onclick:() => changeTool(t)}, [
+      el("span", {class:"sw", style:"background:" + gateFill(g)}), "T" + t
+    ]);
+    b.disabled = busy;
+    b.title = "MMU_CHANGE_TOOL TOOL=" + t + "  (gate " + g + ")";
+    box.appendChild(b);
+  }
+}
+
+/* ---------- gate table ---------- */
+function buildGateTable(){
+  const t = $("#gateTable");
+  t.textContent = "";
+  t.appendChild(el("thead", {}, [el("tr", {}, ["Gate","Status","Colour","Material","Temp","Spool","Speed","Tools","ES"]
+    .map(h => el("th", {}, [h])))]));
+  const tb = el("tbody", {});
+  for(let i = 0; i < S.d.num_gates; i++){
+    const statusSel = el("select", {id:"g-st-" + i, onchange:e => setGate(i, "status", +e.target.value)},
+      [["1","On spool"],["2","Buffered"],["0","Empty"],["-1","Unknown"]].map(([v,l]) =>
+        el("option", {value:v}, [l])));
+    const color = el("input", {type:"color", id:"g-col-" + i,
+      oninput:e => setGate(i, "color", e.target.value.replace("#",""))});
+    const mat = el("input", {class:"w60", id:"g-mat-" + i,
+      onchange:e => setGate(i, "material", e.target.value)});
+    const temp = el("input", {type:"number", class:"w60", id:"g-tmp-" + i,
+      onchange:e => setGate(i, "temperature", +e.target.value)});
+    const spool = el("input", {type:"number", class:"w60", id:"g-spl-" + i,
+      onchange:e => setGate(i, "spool_id", +e.target.value)});
+    const speed = el("input", {type:"number", class:"w60", id:"g-spd-" + i,
+      onchange:e => setGate(i, "speed", +e.target.value)});
+    tb.appendChild(el("tr", {id:"g-row-" + i}, [
+      el("td", {class:"n"}, ["G" + i]),
+      el("td", {}, [statusSel]), el("td", {}, [color]), el("td", {}, [mat]),
+      el("td", {}, [temp]), el("td", {}, [spool]), el("td", {}, [speed]),
+      el("td", {id:"g-tools-" + i, class:"n"}, []),
+      el("td", {id:"g-es-" + i, class:"n"}, [])
+    ]));
+  }
+  t.appendChild(tb);
+  updateGateTable();
+}
+function updateGateTable(){
+  for(let i = 0; i < S.d.num_gates; i++){
+    const row = document.getElementById("g-row-" + i);
+    if(!row) return;
+    row.className = i === S.gate ? "sel" : "";
+    const set = (id, val) => {
+      const n = document.getElementById(id);
+      if(n && document.activeElement !== n) n.value = val;
+    };
+    set("g-st-" + i, String(S.gate_status[i]));
+    set("g-col-" + i, "#" + (S.gate_color[i] || "cccccc").slice(0,6));
+    set("g-mat-" + i, S.gate_material[i]);
+    set("g-tmp-" + i, S.gate_temperature[i]);
+    set("g-spl-" + i, S.gate_spool_id[i]);
+    set("g-spd-" + i, S.gate_speed_override[i]);
+    const tl = toolsForGate(i);
+    document.getElementById("g-tools-" + i).textContent = tl.length ? tl.map(t => "T" + t).join(" ") : "—";
+    document.getElementById("g-es-" + i).textContent = esLetter(S.endless_spool_groups[i]);
+  }
+}
+function setGate(i, field, value){
+  if(field === "status") S.gate_status[i] = value;
+  if(field === "color") S.gate_color[i] = value;
+  if(field === "material") S.gate_material[i] = value;
+  if(field === "temperature") S.gate_temperature[i] = value;
+  if(field === "spool_id") S.gate_spool_id[i] = value;
+  if(field === "speed") S.gate_speed_override[i] = value;
+  $("#gateCmd").textContent = "MMU_GATE_MAP GATE=" + i
+    + " MATERIAL='" + S.gate_material[i] + "'"
+    + " COLOR=" + (S.gate_color[i] || "").slice(0,6)
+    + " TEMP=" + S.gate_temperature[i]
+    + " SPOOLID=" + S.gate_spool_id[i]
+    + " SPEED=" + S.gate_speed_override[i]
+    + " AVAILABLE=" + S.gate_status[i] + " QUIET=1";
+  renderRail(); renderTools(); renderSide(); renderPath(); renderNav();
+}
+
+function renderTtg(){
+  const t = $("#ttgTable");
+  if(!t) return;
+  t.textContent = "";
+  t.appendChild(el("thead", {}, [el("tr", {}, ["Tool","Gate","Filament","EndlessSpool group"]
+    .map(h => el("th", {}, [h])))]));
+  const tb = el("tbody", {});
+  for(let tool = 0; tool < S.d.num_gates; tool++){
+    const gsel = el("select", {onchange:e => { S.ttg_map[tool] = +e.target.value; afterTtg(); }},
+      Array.from({length:S.d.num_gates}, (_, g) => el("option", {value:g, selected:S.ttg_map[tool] === g ? "" : null},
+        ["Gate " + g])));
+    const g = S.ttg_map[tool];
+    const esel = el("select", {onchange:e => { S.endless_spool_groups[g] = +e.target.value; afterTtg(); }},
+      Array.from({length:S.d.num_gates}, (_, k) => el("option", {value:k+1,
+        selected:S.endless_spool_groups[g] === k+1 ? "" : null}, [esLetter(k+1)])));
+    tb.appendChild(el("tr", {class:tool === S.tool ? "sel" : ""}, [
+      el("td", {class:"n"}, ["T" + tool]),
+      el("td", {}, [gsel]),
+      el("td", {}, [el("span", {class:"chips"}, [
+        el("span", {class:"chip", style:"background:" + gateFill(g) + ";width:22px"}, [" "]),
+        el("span", {class:"chip"}, [S.gate_material[g] || "—"]),
+        el("span", {class:"chip"}, [STATUS_TXT[S.gate_status[g]]])
+      ])]),
+      el("td", {}, [esel])
+    ]));
+  }
+  t.appendChild(tb);
+  $("#ttgCmd").textContent = "MMU_TTG_MAP MAP=" + S.ttg_map.join(",")
+    + "\nMMU_ENDLESS_SPOOL ENABLE=1 GROUPS=" + S.endless_spool_groups.join(",");
+}
+function afterTtg(){ renderTtg(); renderRail(); renderTools(); updateGateTable(); }
+
+/* ---------- pre-flight ---------- */
+const FILES = [
+  {name:"voron_logo_3c.gcode", slicer:"OrcaSlicer 2.3.2", tools:[0,2,6], changes:142,
+   colors:["000000","ffffff","ff0000"], materials:["ABS+","ABS+","ABS+"], temps:[260,260,260],
+   purge:[[0,140,180],[150,0,190],[190,150,0]]},
+  {name:"benchy_multi.gcode", slicer:"PrusaSlicer 2.9.0", tools:[0,1,3], changes:88,
+   colors:["000000","00b050","00ff7f"], materials:["ABS+","PLA","PLA"], temps:[260,215,215],
+   purge:null},
+  {name:"bracket_single.gcode", slicer:"OrcaSlicer 2.3.2", tools:[0], changes:0,
+   colors:["000000"], materials:["ABS+"], temps:[260], purge:null}
+];
+function renderPreflight(){
+  const fb = $("#files");
+  fb.textContent = "";
+  FILES.forEach((f, i) => {
+    const b = el("button", {class:"file" + (i === ui.preflightFile ? " on" : ""),
+      onclick:() => { ui.preflightFile = i; renderPreflight(); }}, [
+      el("div", {class:"nm"}, [f.name]),
+      el("div", {class:"mt"}, [f.tools.length + " tools · " + f.changes + " changes · " + f.slicer]),
+      el("div", {class:"swatches"}, f.colors.map(c => el("i", {style:"background:#" + c})))
+    ]);
+    fb.appendChild(b);
+  });
+
+  const f = FILES[ui.preflightFile], out = $("#preflightOut");
+  out.textContent = "";
+  const rows = [], problems = [];
+  f.tools.forEach((t, idx) => {
+    const g = S.ttg_map[t], st = S.gate_status[g];
+    const gcol = (S.gate_color[g] || "").toLowerCase(), scol = f.colors[idx].toLowerCase();
+    const gmat = (S.gate_material[g] || "").toUpperCase(), smat = f.materials[idx].toUpperCase();
+    const issues = [];
+    if(st === 0) issues.push(["crit", "gate empty"]);
+    if(st === -1) issues.push(["warn", "gate status unknown"]);
+    if(gmat && smat && gmat !== smat) issues.push(["crit", "material " + gmat + " ≠ " + smat]);
+    if(gcol && scol && gcol !== scol) issues.push(["warn", "colour differs"]);
+    if(S.gate_temperature[g] !== f.temps[idx]) issues.push(["warn",
+      "temp " + S.gate_temperature[g] + " ≠ " + f.temps[idx]]);
+    issues.forEach(i => problems.push(i));
+    rows.push({t, g, st, scol, smat, stemp:f.temps[idx], issues});
+  });
+
+  const worst = problems.some(p => p[0] === "crit") ? "crit" : problems.length ? "warn" : "ok";
+  out.appendChild(el("div", {style:"margin-bottom:10px"}, [
+    el("span", {class:"badge " + worst}, [worst === "ok" ? "ready to print"
+      : worst === "warn" ? problems.length + " warning" + (problems.length === 1 ? "" : "s")
+      : problems.filter(p => p[0] === "crit").length + " blocking issue(s)"])
+  ]));
+
+  const tbl = el("table", {});
+  tbl.appendChild(el("thead", {}, [el("tr", {}, ["Tool","Gate","Slicer","Loaded","Check"]
+    .map(h => el("th", {}, [h])))]));
+  const tb = el("tbody", {});
+  rows.forEach(r => {
+    tb.appendChild(el("tr", {}, [
+      el("td", {class:"n"}, ["T" + r.t]),
+      el("td", {class:"n"}, ["G" + r.g]),
+      el("td", {}, [el("span", {class:"chips"}, [
+        el("span", {class:"chip", style:"background:#" + r.scol + ";width:22px"}, [" "]),
+        el("span", {class:"chip"}, [r.smat]), el("span", {class:"chip"}, [r.stemp + "°"])])]),
+      el("td", {}, [el("span", {class:"chips"}, [
+        el("span", {class:"chip", style:"background:" + gateFill(r.g) + ";width:22px"}, [" "]),
+        el("span", {class:"chip"}, [S.gate_material[r.g]]),
+        el("span", {class:"chip"}, [STATUS_TXT[r.st]])])]),
+      el("td", {}, [el("span", {class:"chips"}, r.issues.length
+        ? r.issues.map(i => el("span", {class:"badge " + i[0]}, [i[1]]))
+        : [el("span", {class:"badge ok"}, ["match"])])])
+    ]));
+  });
+  tbl.appendChild(tb);
+  out.appendChild(el("div", {class:"tblwrap"}, [tbl]));
+
+  const acts = el("div", {style:"display:flex;gap:8px;flex-wrap:wrap;margin-top:11px"}, [
+    el("button", {class:"btn" + (worst === "ok" ? " primary" : ""), onclick:() => {
+      log("Print start allowed by pre-flight check", "act"); }}, ["Start print"]),
+    el("button", {class:"btn", onclick:() => {
+      log("MMU_SLICER_TOOL_MAP AUTOMAP=material — remapping tools to matching gates", "act");
+      ui.view = "gates"; showView(); }}, ["Automap by material"]),
+    el("button", {class:"btn", onclick:() => { ui.view = "gates"; showView(); }}, ["Edit TTG map"])
+  ]);
+  out.appendChild(acts);
+
+  if(f.purge){
+    out.appendChild(el("div", {class:"lbl", style:"margin-top:13px"}, ["Purge volumes (mm³)"]));
+    const m = el("table", {class:"matrix", style:"margin-top:5px"});
+    const head = el("tr", {}, [el("th", {}, ["from ↓ to →"])].concat(f.tools.map(t => el("th", {}, ["T" + t]))));
+    m.appendChild(head);
+    f.purge.forEach((row, i) => {
+      m.appendChild(el("tr", {}, [el("th", {}, ["T" + f.tools[i]])].concat(row.map(v =>
+        el("td", {style:"background:rgba(45,106,159," + (v/260) + ")"}, [String(v)])))));
+    });
+    out.appendChild(el("div", {class:"tblwrap"}, [m]));
+  }
+  out.appendChild(el("div", {class:"cmd", style:"margin-top:12px"},
+    ["; processed by HappyHare\nMMU_START_SETUP INITIAL_TOOL=" + f.tools[0]
+     + " REFERENCED_TOOLS=" + f.tools.join(",")
+     + " TOOL_COLORS=" + f.colors.join(",")
+     + " TOOL_MATERIALS=" + f.materials.join(",")
+     + " TOOL_TEMPS=" + f.temps.join(",")
+     + " TOTAL_TOOLCHANGES=" + f.changes]));
+}
+
+/* ---------- health ---------- */
+function renderHealth(){
+  const qb = $("#qualityBars");
+  qb.textContent = "";
+  SEED.stats_gate.forEach((g, i) => {
+    if(i >= S.d.num_gates) return;
+    const q = g.quality;
+    const known = q >= 0;
+    const pct = known ? Math.max(4, Math.min(100, q * 100)) : 0;
+    const col = !known ? "var(--line)" : q >= 0.95 ? "var(--ok)" : q >= 0.85 ? "var(--warn)" : "var(--crit)";
+    qb.appendChild(el("div", {class:"bar"}, [
+      el("span", {class:"num"}, ["G" + i]),
+      el("span", {class:"track"}, [el("i", {style:"width:" + pct + "%;background:" + col})]),
+      el("span", {class:"num", style:"font-size:11px;color:var(--muted)"},
+        [known ? (q * 100).toFixed(0) + "% · " + g.loads + "L/" + g.load_failures + "F" : "no data"])
+    ]));
+  });
+
+  const cb = $("#counterBars");
+  cb.textContent = "";
+  SEED.counters.forEach(c => {
+    const has = c.limit > 0;
+    const pct = has ? Math.min(100, (c.count / c.limit) * 100) : 0;
+    const col = pct > 85 ? "var(--crit)" : pct > 60 ? "var(--warn)" : "var(--ok)";
+    cb.appendChild(el("div", {class:"bar"}, [
+      el("span", {style:"font-size:11px"}, [c.name]),
+      el("span", {class:"track"}, [el("i", {style:"width:" + pct + "%;background:" + col})]),
+      el("span", {class:"num", style:"font-size:11px;color:var(--muted)"},
+        [has ? c.count + " / " + c.limit : c.count + " (no limit)"])
+    ]));
+  });
+
+  const parts = [["form_tip","Form/cut tip","#7f6bd4"],["unload","Unload","#2d6a9f"],
+    ["load","Load","#2f7d5b"],["purge","Purge","#a96908"],
+    ["post_load","Post-load","#5d748a"],["pre_unload","Pre-unload","#bc3b2d"]];
+  const sum = parts.reduce((a,[k]) => a + SEED.swaps[k], 0);
+  const st = $("#swapStack"), lg = $("#swapLegend");
+  st.textContent = ""; lg.textContent = "";
+  parts.forEach(([k, label, col]) => {
+    const pc = (SEED.swaps[k] / sum) * 100;
+    st.appendChild(el("i", {style:"width:" + pc + "%;background:" + col, title:label}));
+    lg.appendChild(el("span", {}, [el("i", {style:"background:" + col}),
+      label + " " + (SEED.swaps[k] / 60).toFixed(0) + " min"]));
+  });
+  $("#swapTotal").textContent = SEED.swaps.total_swaps + " swaps · "
+    + (SEED.swaps.total / 3600).toFixed(1) + " h total · " + SEED.swaps.total_pauses + " pauses";
+}
+
+/* ---------- gate popover (simple confirm row) ---------- */
+function openGate(i){
+  ui.selectedGate = i;
+  const busy = S.print_state === "printing" || S.action !== "Idle";
+  const acts = [
+    ["Select", "MMU_SELECT GATE=" + i, busy],
+    ["Check", "MMU_CHECK_GATE GATE=" + i, busy],
+    ["Preload", "MMU_PRELOAD GATE=" + i, busy],
+    ["Eject", "MMU_EJECT GATE=" + i, busy]
+  ];
+  showDialog({
+    title:"Gate " + i + " — " + STATUS_TXT[S.gate_status[i]],
+    lines:[
+      S.gate_material[i] + " · " + S.gate_temperature[i] + " °C · EndlessSpool " + esLetter(S.endless_spool_groups[i]),
+      "Mapped tools: " + (toolsForGate(i).map(t => "T" + t).join(", ") || "none"),
+      busy ? "Motion commands are unavailable while the MMU is busy." : "Sends one command through OctoPrint's queue."
+    ],
+    buttons:acts.map(([label, cmd, dis]) => ({label, style:"secondary", disabled:dis,
+      run:() => { log(cmd + " — queued through OctoPrint", "act"); closeDialog(); }}))
+      .concat([{label:"Edit gate", style:"primary", run:() => { closeDialog(); ui.view = "gates"; showView(); }},
+               {label:"Close", style:"ghost", run:closeDialog}]),
+    kind:"info"
+  });
+}
+
+/* ---------- dialog / prompt renderer ---------- */
+function showDialog(spec){
+  S.prompt = spec;
+  renderPrompt();
+}
+function closeDialog(){ S.prompt = null; renderPrompt(); }
+function renderPrompt(){
+  const scrim = $("#scrim");
+  if(!S.prompt){ scrim.hidden = true; return; }
+  const p = S.prompt;
+  $("#dlgTitle").textContent = p.title;
+  document.querySelector(".dialog header .mk").style.background =
+    p.kind === "error" ? "var(--crit)" : "var(--accent)";
+  const body = $("#dlgBody");
+  body.textContent = "";
+  p.lines.forEach(l => body.appendChild(el("div", {}, [l])));
+  const foot = $("#dlgFoot");
+  foot.textContent = "";
+  p.buttons.forEach(b => {
+    const cls = b.style === "primary" ? "btn primary" : b.style === "warning" ? "btn warnbtn"
+      : b.style === "error" ? "btn danger" : "btn";
+    const node = el("button", {class:cls, onclick:b.run}, [b.label]);
+    if(b.disabled) node.disabled = true;
+    foot.appendChild(node);
+  });
+  scrim.hidden = false;
+}
+
+/* ---------- recovery wizard ---------- */
+function renderRecovery(){
+  const panel = $("#recoverPanel");
+  if(!S.recovery){ panel.hidden = true; return; }
+  panel.hidden = false;
+  $("#recReason").textContent = S.reason_for_pause;
+  const box = $("#recSteps");
+  box.textContent = "";
+  const steps = [
+    {t:"Unlock", s:"MMU_UNLOCK — restores hotend temperature and idle timeout", btn:"Unlock",
+      run:() => { S.print_state = "paused"; log("Restoring extruder temperature"); S.recovery = 1; render(); }},
+    {t:"Tell Happy Hare where the filament is", s:"MMU_RECOVER LOADED=0 — filament is back at the gate",
+      btn:"Recover", run:() => { S.filament_pos = 0; S.filament = "Unloaded"; S.sensors.extruder = false;
+        S.sensors.toolhead = false; log("Filament position recovered: UNLOADED AND PARKED");
+        S.recovery = 2; render(); }},
+    {t:"Resume the print", s:"OctoPrint resume → RESUME (Happy Hare retries the tool change)", btn:"Resume",
+      run:() => { S.recovery = null; S.reason_for_pause = ""; log("Print resumed", "act");
+        runScenario("resume_after_fix"); }}
+  ];
+  steps.forEach((st, i) => {
+    const state = i < S.recovery ? "done" : i === S.recovery ? "now" : "";
+    const b = el("button", {class:"btn" + (state === "now" ? " primary" : ""), onclick:st.run}, [st.btn]);
+    b.disabled = state !== "now";
+    box.appendChild(el("div", {class:"step " + state}, [
+      el("span", {class:"no"}, [String(i + 1)]),
+      el("div", {}, [el("p", {}, [st.t]), el("small", {}, [st.s])]),
+      b
+    ]));
+  });
+}
+
+/* ============================================================
+   Simulation engine
+   ============================================================ */
+let timers = [];
+function clearSim(){ timers.forEach(clearTimeout); timers = []; setSimState("idle"); }
+function setSimState(t){ $("#simstate").textContent = t; }
+function seq(steps, label){
+  clearSim();
+  setSimState(label + " running");
+  let t = 0;
+  steps.forEach(([delay, fn]) => {
+    t += delay;
+    timers.push(setTimeout(() => { fn(); render(); }, t * sim.speed));
+  });
+  timers.push(setTimeout(() => setSimState("idle"), t * sim.speed + 200));
+}
+function changeTool(t){
+  if(t === S.tool){ log("Tool T" + t + " already selected"); return; }
+  runScenario("toolchange", t);
+}
+
+function unloadSteps(){
+  return [
+    [0, () => { S.action = "Cutting Tip"; S.operation = "toolchange"; S.filament_direction = -1;
+      log("Cutting filament tip"); }],
+    [900, () => { S.action = "Exiting Ext"; S.filament_pos = 9; S.sensors.toolhead = false;
+      log("Unloading extruder"); }],
+    [600, () => { S.filament_pos = 7; }],
+    [500, () => { S.filament_pos = 5; S.sensors.extruder = false; }],
+    [400, () => { S.action = "Unloading"; S.filament_pos = 4; S.bowden_progress = 100;
+      log("Unloading bowden " + S.d.bowden_length + "mm"); }],
+    [350, () => { S.filament_pos = 3; S.bowden_progress = 72; }],
+    [350, () => { S.bowden_progress = 44; }],
+    [350, () => { S.bowden_progress = 18; }],
+    [350, () => { S.bowden_progress = 0; S.filament_pos = 2; }],
+    [300, () => { S.filament_pos = 1; }],
+    [300, () => { S.filament_pos = 0; S.filament = "Unloaded"; S.bowden_progress = -1;
+      S.gate_status[S.gate] = 2; log("Filament parked in gate " + S.gate); }]
+  ];
+}
+function selectSteps(gate){
+  return [
+    [250, () => { S.action = "Selecting"; S.servo = "Up"; }],
+    [400, () => { S.servo = "Move"; S.gate = gate; log("Selecting gate " + gate); }],
+    [700, () => { S.servo = "Down"; }]
+  ];
+}
+function loadSteps(tool, gate){
+  return [
+    [250, () => { S.action = "Loading"; S.filament_direction = 1; S.filament_pos = 1;
+      log("Loading gate " + gate); }],
+    [300, () => { S.filament_pos = 2; S.bowden_progress = 0; }],
+    [300, () => { S.filament_pos = 3; S.bowden_progress = 26; }],
+    [300, () => { S.bowden_progress = 55; }],
+    [300, () => { S.bowden_progress = 83; }],
+    [300, () => { S.bowden_progress = 100; S.filament_pos = 4; }],
+    [250, () => { S.filament_pos = 5; S.sensors.extruder = true; S.bowden_progress = -1;
+      S.action = "Homing"; log("Homing to extruder"); }],
+    [350, () => { S.action = "Loading Ext"; S.filament_pos = 6; }],
+    [300, () => { S.filament_pos = 7; }],
+    [300, () => { S.filament_pos = 8; S.sensors.toolhead = true; }],
+    [250, () => { S.filament_pos = 9; }],
+    [250, () => { S.filament_pos = 10; S.filament = "Loaded"; S.tool = tool;
+      log("Loaded " + S.gate_material[gate] + " from gate " + gate); }],
+    [200, () => { S.action = "Purging"; log("Purging into blobifier"); }],
+    [900, () => { S.blobs += 1; S.action = "Idle"; S.filament_direction = 0; S.operation = "";
+      S.num_toolchanges += 1; S.encoder.headroom = 7.1;
+      log("Tool change complete: T" + S.last_tool + " > T" + tool); }]
+  ];
+}
+
+function runScenario(which, arg){
+  if(which === "toolchange"){
+    const tool = arg === undefined ? 2 : arg;
+    const gate = S.ttg_map[tool];
+    S.print_state = "printing"; S.last_tool = S.tool; S.next_tool = tool;
+    log("Tool change requested: T" + S.tool + " > T" + tool, "act");
+    seq(unloadSteps().concat(selectSteps(gate), loadSteps(tool, gate)), "tool change");
+  }
+
+  if(which === "failure"){
+    const tool = 4, gate = S.ttg_map[tool];
+    S.print_state = "printing"; S.last_tool = S.tool; S.next_tool = tool;
+    log("Tool change requested: T" + S.tool + " > T" + tool, "act");
+    seq(unloadSteps().concat(selectSteps(gate), [
+      [250, () => { S.action = "Loading"; S.filament_direction = 1; S.filament_pos = 1;
+        log("Loading gate " + gate); }],
+      [300, () => { S.filament_pos = 2; S.bowden_progress = 0; }],
+      [350, () => { S.filament_pos = 3; S.bowden_progress = 18; }],
+      [500, () => { S.bowden_progress = 31; S.encoder.flow_rate = 12; }],
+      [700, () => {
+        S.errorsBlocked += 1;
+        log("MMU issue: Filament not seen by encoder after 70.0mm from gate " + gate, "err");
+        S.action = "Idle"; S.filament = "Unknown"; S.filament_pos = -1; S.bowden_progress = -1;
+        S.print_state = "pause_locked"; S.encoder.flow_rate = 0;
+        S.reason_for_pause = "No movement detected by encoder loading gate " + gate;
+        log("Parking toolhead and pausing print");
+        S.recovery = 0;
+        showDialog({
+          kind:"error",
+          title:"Happy Hare Error Notice",
+          lines:[
+            "MMU issue: Filament not seen by encoder after 70.0mm from gate " + gate,
+            "Reason: " + S.reason_for_pause,
+            "After fixing, call RESUME to continue printing (MMU_UNLOCK to restore temperature)"
+          ],
+          buttons:[
+            {label:"UNLOCK", style:"secondary", run:() => { closeDialog();
+              S.print_state = "paused"; S.recovery = 1; log("Restoring extruder temperature"); render(); }},
+            {label:"RESUME", style:"warning", run:() => { closeDialog();
+              log("RESUME refused: filament position must be known — use MMU_RECOVER", "err");
+              S.errorsBlocked += 1; render(); }}
+          ]
+        });
+      }]
+    ]), "load failure");
+  }
+
+  if(which === "resume_after_fix"){
+    const tool = 4, gate = S.ttg_map[tool];
+    S.print_state = "printing";
+    seq(loadSteps(tool, gate).concat([[200, () => { S.encoder.flow_rate = 100; S.print_state = "printing"; }]]),
+      "retry load");
+  }
+
+  if(which === "runout"){
+    const fromGate = S.gate >= 0 ? S.gate : 0;
+    const group = S.endless_spool_groups[fromGate];
+    let next = -1;
+    for(let i = 0; i < S.d.num_gates; i++){
+      if(i !== fromGate && S.endless_spool_groups[i] === group){ next = i; break; }
+    }
+    if(next < 0){ log("No other gate in EndlessSpool group " + esLetter(group), "err"); return; }
+    S.print_state = "printing";
+    S.gate_status[next] = 1;
+    log("Runout detected on gate " + fromGate, "act");
+    seq([
+      [0, () => { S.operation = "runout"; S.gate_status[fromGate] = 0;
+        log("EndlessSpool: group " + esLetter(group) + " — switching gate " + fromGate + " > " + next); }]
+    ].concat(unloadSteps(), selectSteps(next), [
+      [0, () => { S.ttg_map[S.tool] = next; log("TTG remapped: T" + S.tool + " > gate " + next); }]
+    ], loadSteps(S.tool, next), [
+      [200, () => { S.operation = ""; log("Print continues on gate " + next, "act"); }]
+    ]), "runout swap");
+  }
+
+  if(which === "preflight"){
+    ui.view = "preflight"; ui.preflightFile = 1; showView();
+    log("Pre-flight check for benchy_multi.gcode — 2 issues found", "act");
+  }
+
+  if(which === "reset"){
+    clearSim();
+    S = freshState();
+    ui.log = [];
+    log("Happy Hare v3.42 ready · ERCF 2.0 · 12 gates");
+    buildGateTable(); renderHealth(); renderPreflight(); render();
+  }
+}
+
+/* ============================================================
+   View switching + wiring
+   ============================================================ */
+function showView(){
+  ["operate","gates","preflight","health","console"].forEach(v => {
+    document.getElementById("view-" + v).hidden = v !== ui.view;
+  });
+  document.querySelectorAll(".subtab").forEach(b => {
+    b.classList.toggle("on", b.dataset.view === ui.view);
+  });
+  if(ui.view === "preflight") renderPreflight();
+  if(ui.view === "health") renderHealth();
+  if(ui.view === "console") renderConsole();
+}
+
+function boot(){
+  sim = {speed:1};
+  S = freshState();
+  ui = freshUi();
+  document.querySelectorAll(".subtab").forEach(b => {
+    b.addEventListener("click", () => { ui.view = b.dataset.view; showView(); });
+  });
+  document.querySelectorAll("[data-sim]").forEach(b => {
+    b.addEventListener("click", () => runScenario(b.dataset.sim));
+  });
+  $("#speed").addEventListener("change", e => { sim.speed = parseFloat(e.target.value); });
+  $("#hw").addEventListener("change", e => {
+    hw = e.target.value;
+    clearSim();
+    S = freshState();
+    ui.log = [];
+    log(hw === "ercf" ? "Happy Hare v3.42 ready · ERCF 2.0 · 12 gates"
+                      : "Happy Hare v3.42 ready · BoxTurtle 1.0 · 4 lanes (virtual selector)");
+    buildGateTable(); renderHealth(); renderPreflight(); render(); showView();
+  });
+  $("#layout").addEventListener("change", e => {
+    layout = e.target.value;
+    applyLayout();
+    log(compact()
+      ? "Compact layout — matches UI Customizer (red-night, icon tabs, fluid layout)"
+      : "Stock OctoPrint layout");
+  });
+  $("#rawToggle").addEventListener("change", e => { ui.raw = e.target.checked; renderConsole(); });
+  $("#btnUnload").addEventListener("click", () => {
+    log("MMU_UNLOAD — queued", "act");
+    seq(unloadSteps().concat([[200, () => { S.action = "Idle"; S.filament_direction = 0; }]]), "unload");
+  });
+  $("#btnRecoverSide").addEventListener("click", () => { ui.view = "operate"; showView(); });
+  document.getElementById("scrim").addEventListener("click", e => {
+    if(e.target.id === "scrim" && S.prompt && S.prompt.kind !== "error") closeDialog();
+  });
+
+  log("Happy Hare v3.42 ready · ERCF 2.0 · 12 gates");
+  log("Gate map loaded from mmu_vars.cfg · 12 gates, 6 with filament");
+  buildGateTable(); renderHealth(); renderPreflight(); renderTabBar(); render(); showView();
+}
+boot();
+</script>

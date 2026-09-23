@@ -1,0 +1,6 @@
+include README.md
+include LICENSE
+recursive-include octoprint_happyhare/templates *
+recursive-include octoprint_happyhare/static *
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
