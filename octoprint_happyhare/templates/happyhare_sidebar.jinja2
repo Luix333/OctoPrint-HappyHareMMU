@@ -20,5 +20,15 @@
     <button class="btn btn-small hh-grow" id="hh-side-unload">Unload</button>
     <button class="btn btn-small hh-grow" id="hh-side-recover">Recover</button>
   </div>
+
+  <div class="hh-sensors" id="hh-sensors">
+    <div class="hh-between hh-sensors-head">
+      <span class="hh-label">Sensors</span>
+      <button class="btn btn-mini" id="hh-sensors-refresh"
+              title="Runs QUERY_ENDSTOPS and QUERY_PROBE — the switches update on their own, endstops and the probe only when asked">Refresh</button>
+    </div>
+    <div id="hh-sensors-list"></div>
+  </div>
+
   <div class="hh-hint" id="hh-side-link"></div>
 </div>

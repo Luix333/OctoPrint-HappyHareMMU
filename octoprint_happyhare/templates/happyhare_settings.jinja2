@@ -3,7 +3,7 @@
   <div class="control-group">
     <label class="control-label">Klipper API socket</label>
     <div class="controls">
-      <input type="text" class="input-xxlarge" data-bind="value: settings.plugins.happyhare.socket_path"
+      <input type="text" class="input-xxlarge" data-bind="value: settings.settings.plugins.happyhare.socket_path"
              placeholder="auto (e.g. ~/printer_data/comms/klippy.sock)">
       <span class="help-block">
         Leave empty to detect it. Klipper must be started with <code>-a &lt;path&gt;</code> and OctoPrint
@@ -17,7 +17,7 @@
   <div class="control-group">
     <div class="controls">
       <label class="checkbox">
-        <input type="checkbox" data-bind="checked: settings.plugins.happyhare.protect_errors">
+        <input type="checkbox" data-bind="checked: settings.settings.plugins.happyhare.protect_errors">
         Let Happy Hare handle MMU errors
       </label>
       <span class="help-block">
@@ -27,7 +27,7 @@
         shutdowns, heater faults and MCU errors are never swallowed.
       </span>
       <label class="checkbox">
-        <input type="checkbox" data-bind="checked: settings.plugins.happyhare.render_prompts">
+        <input type="checkbox" data-bind="checked: settings.settings.plugins.happyhare.render_prompts">
         Show Happy Hare's error dialog
       </label>
       <span class="help-block">
@@ -35,16 +35,16 @@
         cannot display. RESUME and CANCEL are routed through OctoPrint so the job state stays in sync.
       </span>
       <label class="checkbox">
-        <input type="checkbox" data-bind="checked: settings.plugins.happyhare.print_end_on_cancel">
+        <input type="checkbox" data-bind="checked: settings.settings.plugins.happyhare.print_end_on_cancel">
         Tell Happy Hare when a print is cancelled
       </label>
       <span class="help-block">
         Appends this to OctoPrint's <em>After print job is cancelled</em> script, otherwise Happy Hare
         never learns the job ended:
-        <input type="text" class="input-large" data-bind="value: settings.plugins.happyhare.cancel_command">
+        <input type="text" class="input-large" data-bind="value: settings.settings.plugins.happyhare.cancel_command">
       </span>
       <label class="checkbox">
-        <input type="checkbox" data-bind="checked: settings.plugins.happyhare.strip_tool_temps">
+        <input type="checkbox" data-bind="checked: settings.settings.plugins.happyhare.strip_tool_temps">
         Strip the tool number from M104/M109
       </label>
       <span class="help-block">
@@ -58,7 +58,7 @@
   <div class="control-group">
     <div class="controls">
       <label class="checkbox">
-        <input type="checkbox" data-bind="checked: settings.plugins.happyhare.preprocess_uploads">
+        <input type="checkbox" data-bind="checked: settings.settings.plugins.happyhare.preprocess_uploads">
         Substitute Happy Hare's slicer placeholders on upload
       </label>
       <span class="help-block">
@@ -76,7 +76,7 @@
   <div class="control-group">
     <label class="control-label">Density</label>
     <div class="controls">
-      <select data-bind="value: settings.plugins.happyhare.density">
+      <select data-bind="value: settings.settings.plugins.happyhare.density">
         <option value="auto">Auto (compact on narrow layouts and UI Customizer)</option>
         <option value="cozy">Always roomy</option>
         <option value="compact">Always compact</option>
@@ -86,8 +86,16 @@
   <div class="control-group">
     <div class="controls">
       <label class="checkbox">
-        <input type="checkbox" data-bind="checked: settings.plugins.happyhare.confirm_moves">
+        <input type="checkbox" data-bind="checked: settings.settings.plugins.happyhare.confirm_moves">
         Confirm commands that move filament
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" data-bind="checked: settings.settings.plugins.happyhare.show_navbar">
+        Show the MMU indicator in the top bar
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" data-bind="checked: settings.settings.plugins.happyhare.show_sensors">
+        Show the sensor panel in the sidebar
       </label>
     </div>
   </div>

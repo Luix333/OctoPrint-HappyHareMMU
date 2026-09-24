@@ -257,6 +257,33 @@ class TestCommandGating(unittest.TestCase):
         self.assertIn("AVAILABLE=1", sent)
 
 
+class TestSensorRefresh(unittest.TestCase):
+    def test_queries_endstops_and_probe(self):
+        plugin = make_plugin()
+        plugin._status = {"probe": {"last_query": False}}
+        plugin._refresh_sensors()
+        self.assertEqual(plugin._printer.sent, ["QUERY_ENDSTOPS", "QUERY_PROBE"])
+
+    def test_skips_probe_when_there_is_none(self):
+        plugin = make_plugin()
+        plugin._status = {}
+        plugin._refresh_sensors()
+        self.assertEqual(plugin._printer.sent, ["QUERY_ENDSTOPS"])
+
+    def test_refused_while_printing(self):
+        plugin = make_plugin()
+        plugin._model.update({"printing": True, "paused": False})
+        response = plugin._refresh_sensors()
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(plugin._printer.sent, [])
+
+    def test_allowed_while_paused(self):
+        plugin = make_plugin()
+        plugin._model.update({"printing": True, "paused": True})
+        plugin._refresh_sensors()
+        self.assertEqual(plugin._printer.sent, ["QUERY_ENDSTOPS"])
+
+
 class TestPreflight(unittest.TestCase):
     def _plugin_with_file(self, metadata, gates, ttg):
         plugin = make_plugin()

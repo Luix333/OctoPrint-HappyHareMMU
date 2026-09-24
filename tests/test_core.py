@@ -181,6 +181,36 @@ class TestModel(unittest.TestCase):
         self.assertEqual(state["gates"], [])
 
 
+class TestEndstopsAndProbe(unittest.TestCase):
+    def test_endstops_put_the_mmu_first(self):
+        status = {"mmu": {}, "query_endstops": {"last_query": {
+            "x": "open", "y": "TRIGGERED", "z": "open", "mmu_selector": "TRIGGERED"}}}
+        endstops = model.normalize(status)["endstops"]
+        self.assertEqual(endstops[0]["id"], "mmu_selector")
+        self.assertEqual(endstops[0]["label"], "Selector home")
+        self.assertTrue(endstops[0]["state"])
+        self.assertTrue(endstops[0]["mmu"])
+        self.assertFalse(endstops[1]["mmu"])
+
+    def test_boolean_endstop_values(self):
+        status = {"query_endstops": {"last_query": {"mmu_selector": True}}}
+        self.assertTrue(model.normalize(status)["endstops"][0]["state"])
+
+    def test_no_query_yet_means_no_rows(self):
+        # last_query is empty until QUERY_ENDSTOPS has run - that is "not asked",
+        # and the UI has to say so rather than claim everything is open
+        self.assertEqual(model.normalize({"query_endstops": {}})["endstops"], [])
+
+    def test_probe(self):
+        status = {"probe": {"last_query": True, "last_z_result": 2.345}}
+        probe = model.normalize(status)["probe"]
+        self.assertTrue(probe["triggered"])
+        self.assertEqual(probe["last_z_result"], 2.345)
+
+    def test_no_probe_configured(self):
+        self.assertIsNone(model.normalize({})["probe"])
+
+
 # --------------------------------------------------------------------------
 # Prompt parsing
 # --------------------------------------------------------------------------

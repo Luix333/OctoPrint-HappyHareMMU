@@ -87,6 +87,8 @@ class HappyHarePlugin(
             "strip_tool_temps": True,       # M104/M109 T<n> -> M104/M109
             "confirm_moves": True,          # confirm anything that moves filament
             "density": "auto",              # auto | cozy | compact
+            "show_navbar": True,            # the indicator in OctoPrint's top bar
+            "show_sensors": True,           # sensor panel in the sidebar
             "push_interval": 0.25,
             "console_lines": 200,
         }
@@ -444,6 +446,7 @@ class HappyHarePlugin(
             "endless_spool": ["groups"],
             "prompt_button": ["gcode"],
             "dismiss_prompt": [],
+            "refresh_sensors": [],
             "preflight": ["origin", "path"],
         }
 
@@ -498,10 +501,56 @@ class HappyHarePlugin(
             self._push({"type": "prompt", "prompt": None})
             return _json({"ok": True})
 
+        if command == "refresh_sensors":
+            return self._refresh_sensors()
+
         if command == "preflight":
             return _json(self.preflight(data.get("origin"), data.get("path")))
 
         return _json({"ok": False, "error": "unknown command"}, status=400)
+
+    def _refresh_sensors(self):
+        """Ask Klipper to re-read the endstops and the probe.
+
+        The filament switches publish continuously, but an endstop (the selector
+        home switch) and the probe only update their status when queried, so this
+        sends the two query commands and lets the subscription carry the result
+        back. Both move nothing, but they still go through the G-code queue, so
+        they wait for a print.
+        """
+        with self._model_lock:
+            printing = bool(self._model.get("printing"))
+            paused = bool(self._model.get("paused"))
+        if printing and not paused:
+            return _json({"ok": False, "error": "not while printing"}, status=409)
+
+        available = getattr(self._client, "available_objects", []) if self._client else []
+        commands = ["QUERY_ENDSTOPS"]
+        if "probe" in available or (self._status or {}).get("probe") is not None:
+            commands.append("QUERY_PROBE")
+        self._send(commands)
+        # The queries go out through OctoPrint's queue, and these two objects are
+        # not always part of the subscription, so read them back explicitly once
+        # the commands have had time to run.
+        self._spawn(self._reread_sensors, "happyhare-sensors")
+        return _json({"ok": True, "commands": commands})
+
+    def _reread_sensors(self):
+        if self._client is None:
+            return
+        time.sleep(1.5)
+        # asking for an object Klipper does not have fails the whole query
+        available = getattr(self._client, "available_objects", [])
+        wanted = [name for name in ("query_endstops", "probe")
+                  if not available or name in available]
+        if not wanted:
+            return
+        try:
+            result = self._client.query(wanted)
+        except klippy.KlippyError as error:
+            self._logger.debug("Sensor re-read failed: %s" % error)
+            return
+        self._on_status(result.get("status", {}), False)
 
     # -- command whitelist -------------------------------------------------
     def _run_command(self, command_id, data):

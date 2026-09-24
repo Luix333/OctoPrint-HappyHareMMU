@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "OctoPrint-HappyHareMMU"
-version = "0.1.0"
+version = "0.1.1"
 description = "Live view, control and print-safe error handling for a Happy Hare MMU on Klipper, without Moonraker"
 readme = "README.md"
 requires-python = ">=3.7"

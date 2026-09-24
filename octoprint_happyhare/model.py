@@ -104,6 +104,8 @@ SUBSCRIBE_OBJECTS = (
     "extruder",
     "save_variables",
     "webhooks",
+    "query_endstops",   # last QUERY_ENDSTOPS result, incl. the selector home switch
+    "probe",            # last QUERY_PROBE result
 )
 
 # Fields that must be present before the UI can draw a gate map. Happy Hare can
@@ -385,6 +387,8 @@ def normalize(status, config_mmu=None, save_variables=None):
         ),
 
         "sensors": normalize_sensors(mmu.get("sensors")),
+        "endstops": normalize_endstops(status.get("query_endstops")),
+        "probe": normalize_probe(status.get("probe")),
         "encoder": mmu.get("encoder") or {},
         "slicer_tool_map": mmu.get("slicer_tool_map") or {},
         "spoolman_support": mmu.get("spoolman_support", "off"),
@@ -422,6 +426,49 @@ def normalize_sensors(sensors):
     order = [name for name, _ in SENSOR_ORDER]
     out.sort(key=lambda s: order.index(s["id"]) if s["id"] in order else len(order))
     return out
+
+
+def normalize_endstops(query_endstops):
+    """Klipper's last QUERY_ENDSTOPS result.
+
+    ``last_query`` is only filled in once QUERY_ENDSTOPS has run, so an empty dict
+    means "not asked yet", not "nothing connected".
+    """
+    last = (query_endstops or {}).get("last_query") or {}
+    out = []
+    for name in sorted(last.keys()):
+        raw = last[name]
+        triggered = raw if isinstance(raw, bool) else str(raw).upper() in ("TRIGGERED", "1")
+        out.append({
+            "id": name,
+            "label": _endstop_label(name),
+            "state": bool(triggered),
+            "mmu": "mmu" in name.lower() or "selector" in name.lower(),
+        })
+    # MMU endstops first, then the motion axes
+    out.sort(key=lambda entry: (not entry["mmu"], entry["id"]))
+    return out
+
+
+def _endstop_label(name):
+    pretty = {
+        "mmu_selector": "Selector home",
+        "mmu_gear": "Gear",
+        "x": "X", "y": "Y", "z": "Z",
+    }
+    if name in pretty:
+        return pretty[name]
+    return name.replace("_", " ").replace("mmu ", "MMU ").strip().capitalize()
+
+
+def normalize_probe(probe):
+    """Klipper's probe object: last_query is only current after QUERY_PROBE."""
+    if not probe:
+        return None
+    return {
+        "triggered": bool(probe.get("last_query", False)),
+        "last_z_result": probe.get("last_z_result"),
+    }
 
 
 def _bowden_length(config_mmu, save_variables):

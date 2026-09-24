@@ -319,3 +319,19 @@
     .hh-bar { grid-template-columns: 70px 1fr; }
     .hh-bar > :last-child { grid-column: 1 / -1; }
 }
+
+/* sensors --------------------------------------------------------------- */
+.hh-sensors { margin: 10px 0 6px; }
+.hh-sensors-head { align-items: center; margin-bottom: 5px; }
+.hh-sensor-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 12px;
+    padding: 2px 0;
+    border-bottom: 1px solid var(--hh-line-soft, transparent);
+}
+.hh-sensor-row:last-child { border-bottom: 0; }
+.hh-sensor-name { color: var(--hh-ink-2); }
+.hh-sensor-row .hh-badge { margin-right: 0; }

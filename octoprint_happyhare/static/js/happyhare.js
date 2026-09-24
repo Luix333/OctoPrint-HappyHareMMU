@@ -215,6 +215,7 @@ $(function () {
             self.renderPath();
             self.renderTools();
             self.renderSide();
+            self.renderSensors();
             self.renderNavbar();
             self.renderRecovery();
             self.renderGateTable();
@@ -495,8 +496,11 @@ $(function () {
             var state = self.state;
             var compact = self.compact;
             var X = PATH_X;
-            var y = compact ? 48 : 72;
-            var height = compact ? 104 : 150;
+            // headroom above the path for the sensor labels, below it for the stops
+            var y = compact ? 58 : 82;
+            var height = compact ? 120 : 168;
+            var labelSize = compact ? 14 : 15;
+            var subSize = compact ? 12 : 13;
             var root = svg("svg", {viewBox: "0 0 1000 " + height, role: "img",
                 "aria-label": "Filament path"});
 
@@ -536,13 +540,13 @@ $(function () {
             var mark = function (x, label, sub) {
                 root.appendChild(svg("line", {x1: x, y1: y + 16, x2: x, y2: y + 27,
                     stroke: "var(--hh-line)"}));
-                var main = svg("text", {x: x, y: y + 42, "text-anchor": "middle",
-                    "font-size": 10.5, fill: "var(--hh-ink-2)"});
+                var main = svg("text", {x: x, y: y + 44, "text-anchor": "middle",
+                    "font-size": labelSize, "font-weight": "500", fill: "var(--hh-ink)"});
                 main.textContent = label;
                 root.appendChild(main);
                 if (sub && !compact) {
-                    var second = svg("text", {x: x, y: y + 56, "text-anchor": "middle",
-                        "font-size": 9.5, fill: "var(--hh-muted)"});
+                    var second = svg("text", {x: x, y: y + 62, "text-anchor": "middle",
+                        "font-size": subSize, fill: "var(--hh-muted)"});
                     second.textContent = sub;
                     root.appendChild(second);
                 }
@@ -556,8 +560,9 @@ $(function () {
                     fill: on ? "var(--hh-ok)" : "var(--hh-surface)",
                     stroke: on ? "var(--hh-ok)" : off ? "var(--hh-line)" : "var(--hh-muted)",
                     "stroke-width": 2, "stroke-dasharray": sensor.state === null ? "2 2" : null}));
-                var label = svg("text", {x: x, y: y - 44, "text-anchor": "middle",
-                    "font-size": 9.5, fill: on ? "var(--hh-ok)" : "var(--hh-muted)"});
+                var label = svg("text", {x: x, y: y - 46, "text-anchor": "middle",
+                    "font-size": subSize, "font-weight": "500",
+                    fill: on ? "var(--hh-ok)" : "var(--hh-muted)"});
                 label.textContent = sensor.label;
                 root.appendChild(label);
             };
@@ -743,6 +748,12 @@ $(function () {
             var swatch = byId("hh-nav-swatch");
             var label = byId("hh-nav-text");
             var item = byId("hh-navbar-item");
+            // OctoPrint wraps navbar templates in its own <li>; hide that, so the
+            // slot disappears completely rather than leaving an empty gap
+            var wrapper = byId("navbar_plugin_happyhare") || item;
+            if (wrapper) {
+                wrapper.style.display = self.settingValue("show_navbar", true) ? "" : "none";
+            }
             if (!swatch || !label) return;
             var gate = (state.gates || [])[state.gate];
             swatch.style.background = (gate && gate.rgb) || "transparent";
@@ -757,6 +768,86 @@ $(function () {
                     + " → G" + (state.gate < 0 ? "?" : state.gate);
             }
             if (item) item.classList.toggle("hh-alarm", !!state.paused);
+        };
+
+        // -- sensors -------------------------------------------------------
+        /*
+         * Two kinds of thing live here. The filament switches and the encoder
+         * publish their state continuously through the subscription. An endstop
+         * (the selector home switch) and the probe only update when queried, so
+         * they read "not queried" until the refresh button runs QUERY_ENDSTOPS /
+         * QUERY_PROBE.
+         */
+        self.renderSensors = function () {
+            var card = byId("hh-sensors");
+            var box = byId("hh-sensors-list");
+            if (!card || !box) return;
+            if (!self.settingValue("show_sensors", true)) {
+                card.style.display = "none";
+                return;
+            }
+            card.style.display = "";
+            clear(box);
+
+            var state = self.state;
+            var row = function (label, badgeClass, badgeText, title) {
+                box.appendChild(el("div", {class: "hh-sensor-row", title: title || ""}, [
+                    el("span", {class: "hh-sensor-name", text: label}),
+                    el("span", {class: "hh-badge " + badgeClass, text: badgeText})
+                ]));
+            };
+
+            (state.sensors || []).forEach(function (sensor) {
+                if (sensor.state === null || sensor.state === undefined) {
+                    row(sensor.label, "mute", "disabled", sensor.raw);
+                } else {
+                    row(sensor.label, sensor.state ? "ok" : "mute",
+                        sensor.state ? "triggered" : "open", sensor.raw);
+                }
+            });
+
+            var encoder = state.encoder || {};
+            if (encoder.flow_rate !== undefined || encoder.headroom !== undefined) {
+                var text = encoder.enabled === false ? "disabled"
+                    : (encoder.flow_rate !== undefined ? encoder.flow_rate + "% flow" : "active");
+                row("Encoder", encoder.enabled === false ? "mute" : "ok", text,
+                    encoder.headroom !== undefined ? "headroom " + encoder.headroom + " mm" : "");
+            }
+
+            var endstops = state.endstops || [];
+            if (endstops.length) {
+                endstops.forEach(function (endstop) {
+                    row(endstop.label, endstop.state ? "ok" : "mute",
+                        endstop.state ? "triggered" : "open", endstop.id);
+                });
+            } else {
+                row("Selector home", "warn", "not queried", "press Refresh to run QUERY_ENDSTOPS");
+            }
+
+            if (state.probe) {
+                row("Probe", state.probe.triggered ? "ok" : "mute",
+                    state.probe.triggered ? "triggered" : "open",
+                    state.probe.last_z_result !== undefined && state.probe.last_z_result !== null
+                        ? "last Z result " + state.probe.last_z_result : "");
+            }
+
+            var button = byId("hh-sensors-refresh");
+            if (button) {
+                var blocked = (state.printing && !state.paused) || !self.canControl();
+                button.disabled = !!blocked;
+                button.title = blocked
+                    ? "Not while printing — the queries go through the G-code queue"
+                    : "Runs QUERY_ENDSTOPS and QUERY_PROBE";
+            }
+        };
+
+        self.refreshSensors = function () {
+            OctoPrint.simpleApiCommand("happyhare", "refresh_sensors", {})
+                .fail(function (response) {
+                    var message = (response && response.responseJSON && response.responseJSON.error)
+                        || "could not query the sensors";
+                    new PNotify({title: "Happy Hare", text: message, type: "error"});
+                });
         };
 
         // -- recovery ------------------------------------------------------
@@ -1167,10 +1258,16 @@ $(function () {
         // wiring
         // ------------------------------------------------------------------
         self.selectView = function (view) {
+            if (!view) return;
             self.view = view;
             ["operate", "gates", "preflight", "health", "console"].forEach(function (name) {
                 var node = byId("hh-view-" + name);
-                if (node) node.hidden = name !== view;
+                if (!node) return;
+                var active = name === view;
+                // both, because a theme that gives `section` a display rule beats
+                // the browser's own [hidden] rule and would show every view at once
+                node.hidden = !active;
+                node.style.display = active ? "" : "none";
             });
             $("#hh-subtabs li").each(function () {
                 $(this).toggleClass("active", $(this).find("a").data("view") === view);
@@ -1179,20 +1276,35 @@ $(function () {
             if (view === "preflight") self.loadFileList();
         };
 
-        self.onStartupComplete = function () {
-            $("#hh-subtabs a").on("click", function (event) {
+        /*
+         * Handlers are delegated from the document and namespaced, so they survive
+         * anything that moves or re-renders the panel (UI Customizer rearranges
+         * tabs and sidebar rows), and binding twice is harmless.
+         */
+        self.bindHandlers = function () {
+            var doc = $(document);
+            doc.off(".hh");
+            doc.on("click.hh", "#hh-subtabs a", function (event) {
                 event.preventDefault();
                 self.selectView($(this).data("view"));
             });
-            $("#hh-side-unload").on("click", function () {
+            doc.on("click.hh", "#hh-side-unload", function () {
                 self.command("unload", {}, "Unload the filament?");
             });
-            $("#hh-side-recover").on("click", function () {
-                $("#tab_plugin_happyhare_link a").click();
+            doc.on("click.hh", "#hh-side-recover", function () {
+                $("#tab_plugin_happyhare_link").click();
                 self.selectView("operate");
             });
-            $("#hh-preflight-run").on("click", self.runPreflight);
+            doc.on("click.hh", "#hh-preflight-run", function () { self.runPreflight(); });
+            doc.on("click.hh", "#hh-sensors-refresh", function () { self.refreshSensors(); });
+        };
 
+        self.onAfterBinding = function () {
+            self.bindHandlers();
+        };
+
+        self.onStartupComplete = function () {
+            self.bindHandlers();
             if (window.ResizeObserver) {
                 var root = byId("hh-root");
                 if (root) {
