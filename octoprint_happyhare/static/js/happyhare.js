@@ -748,12 +748,15 @@ $(function () {
             var swatch = byId("hh-nav-swatch");
             var label = byId("hh-nav-text");
             var item = byId("hh-navbar-item");
-            // OctoPrint wraps navbar templates in its own <li>; hide that, so the
-            // slot disappears completely rather than leaving an empty gap
-            var wrapper = byId("navbar_plugin_happyhare") || item;
-            if (wrapper) {
-                wrapper.style.display = self.settingValue("show_navbar", true) ? "" : "none";
-            }
+            // OctoPrint wraps navbar templates in its own <li>. Hide both it and
+            // our own element: which one actually carries the chip depends on how
+            // the wrapper and the template markup nest.
+            var show = self.settingValue("show_navbar", true);
+            [byId("navbar_plugin_happyhare"), item].forEach(function (node) {
+                if (!node) return;
+                node.hidden = !show;
+                node.style.display = show ? "" : "none";
+            });
             if (!swatch || !label) return;
             var gate = (state.gates || [])[state.gate];
             swatch.style.background = (gate && gate.rgb) || "transparent";
@@ -1292,19 +1295,46 @@ $(function () {
                 self.command("unload", {}, "Unload the filament?");
             });
             doc.on("click.hh", "#hh-side-recover", function () {
-                $("#tab_plugin_happyhare_link").click();
+                $("#tab_plugin_happyhare_link a").click();
                 self.selectView("operate");
             });
             doc.on("click.hh", "#hh-preflight-run", function () { self.runPreflight(); });
+            doc.on("click.hh", "#hh-navbar-item", function (event) {
+                event.preventDefault();
+                $("#tab_plugin_happyhare_link a").click();
+            });
             doc.on("click.hh", "#hh-sensors-refresh", function () { self.refreshSensors(); });
+        };
+
+        self.watchSettings = function () {
+            var plugin;
+            try {
+                plugin = self.settings.settings.plugins.happyhare;
+            } catch (error) {
+                return;
+            }
+            ["show_navbar", "show_sensors", "density", "confirm_moves"].forEach(function (key) {
+                var observable = plugin ? plugin[key] : null;
+                if (observable && observable.subscribe && !observable.hhWatched) {
+                    observable.subscribe(function () { self.render(); });
+                    observable.hhWatched = true;
+                }
+            });
         };
 
         self.onAfterBinding = function () {
             self.bindHandlers();
+            self.watchSettings();
+        };
+
+        self.onSettingsHidden = function () {
+            self.watchSettings();
+            self.render();
         };
 
         self.onStartupComplete = function () {
             self.bindHandlers();
+            self.watchSettings();
             if (window.ResizeObserver) {
                 var root = byId("hh-root");
                 if (root) {
@@ -1319,6 +1349,7 @@ $(function () {
         };
 
         self.onSettingsShown = function () {
+            self.watchSettings();
             self.renderLink();
         };
     }

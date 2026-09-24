@@ -335,3 +335,6 @@
 .hh-sensor-row:last-child { border-bottom: 0; }
 .hh-sensor-name { color: var(--hh-ink-2); }
 .hh-sensor-row .hh-badge { margin-right: 0; }
+
+/* navbar chip ----------------------------------------------------------- */
+a.hh-navbar { display: inline-flex; align-items: center; gap: 5px; }

@@ -66,8 +66,8 @@ reads the console, and can take state over a serial fallback channel — see `CO
 **Plugin Manager → Get More → ... from URL**, with either of these:
 
 ```
-https://github.com/Luix333/OctoPrint-HappyHareMMU/releases/download/v0.1.1/octoprint_happyharemmu-0.1.1-py3-none-any.whl
-https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.1.zip
+https://github.com/Luix333/OctoPrint-HappyHareMMU/releases/download/v0.1.2/octoprint_happyharemmu-0.1.2-py3-none-any.whl
+https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.2.zip
 ```
 
 The first is the built wheel and installs directly; the second is the source archive and is built on
@@ -77,7 +77,7 @@ The Plugin Manager also takes the wheel through **... from an uploaded file** (i
 `.zip` and `.tar.gz`), and from a shell on the printer:
 
 ```bash
-~/oprint/bin/pip install https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.1.zip
+~/oprint/bin/pip install https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.2.zip
 sudo service octoprint restart
 ```
 

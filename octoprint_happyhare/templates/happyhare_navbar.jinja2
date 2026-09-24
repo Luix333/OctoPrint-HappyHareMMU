@@ -1,6 +1,7 @@
-<li id="hh-navbar-item">
-  <a href="#tab_plugin_happyhare" title="Happy Hare MMU" id="hh-navbar-link">
-    <span class="hh-nav-swatch" id="hh-nav-swatch"></span>
-    <span class="hh-nav-text" id="hh-nav-text">MMU</span>
-  </a>
-</li>
+{# OctoPrint already wraps this in <li id="navbar_plugin_happyhare">, so this must
+   not open an <li> of its own: the browser would close the wrapper early and the
+   two would end up as siblings. #}
+<a href="#" id="hh-navbar-item" class="hh-navbar" title="Happy Hare MMU">
+  <span class="hh-nav-swatch" id="hh-nav-swatch"></span>
+  <span class="hh-nav-text" id="hh-nav-text">MMU</span>
+</a>
