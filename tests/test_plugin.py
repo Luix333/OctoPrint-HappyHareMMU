@@ -167,6 +167,30 @@ class TestPrompts(unittest.TestCase):
         self.assertEqual(dialog["title"], "Happy Hare Error Notice")
         self.assertEqual(dialog["buttons"][0]["gcode"], "MMU_UNLOCK")
 
+    def test_dialog_arrives_the_way_octoprint_calls_the_hook(self):
+        # comm.py passes the whole command as `action` and the first word as `name`
+        plugin = make_plugin()
+        pushed = []
+        plugin._push = lambda payload: pushed.append(payload)
+        for line in ["prompt_begin Happy Hare Error Notice",
+                     "prompt_text MMU issue: something",
+                     "prompt_button UNLOCK|MMU_UNLOCK|secondary",
+                     "prompt_show"]:
+            name, _, params = line.partition(" ")
+            plugin.hook_action(None, "// action:" + line, line, name=name, params=params or None)
+        self.assertTrue(pushed)
+        dialog = pushed[-1]["prompt"]
+        self.assertEqual(dialog["title"], "Happy Hare Error Notice")
+        self.assertEqual(dialog["text"], ["MMU issue: something"])
+        self.assertEqual(dialog["buttons"][0]["gcode"], "MMU_UNLOCK")
+
+    def test_fallback_state_the_way_octoprint_calls_the_hook(self):
+        plugin = make_plugin()
+        params = '{"gate": 5, "action": "Loading"}'
+        plugin.hook_action(None, "// action:hh_state " + params, "hh_state " + params,
+                           name="hh_state", params=params)
+        self.assertEqual(plugin._status["mmu"]["gate"], 5)
+
     def test_resume_button_goes_through_octoprint(self):
         plugin = make_plugin()
         plugin._push = lambda payload: None
@@ -301,6 +325,25 @@ class TestPreflight(unittest.TestCase):
         result = plugin.preflight("local", "file.gcode")
         self.assertEqual(result["severity"], "critical")
         self.assertIn("material", result["tools"][0]["issues"][0]["text"])
+
+    def test_slicer_data_is_read_by_tool_number(self):
+        # tools 0 and 6 are used; the slicer lists cover all seven extruders
+        gates = [{"index": i, "status": 1, "status_text": "On spool", "material": "ABS+",
+                  "color": "000000"} for i in range(7)]
+        gates[6].update(color="ff0000")
+        plugin = self._plugin_with_file(
+            {"tools": [0, 6],
+             "colors": ["000000", "ffffff", "ffffff", "ffffff", "000000", "000000", "00ff00"],
+             "materials": ["ABS+", "ABS+", "ABS+", "ABS+", "ABS", "ABS", "PLA"],
+             "temps": ["260", "260", "260", "265", "265", "265", "215"]},
+            gates, list(range(7)))
+        result = plugin.preflight("local", "file.gcode")
+        self.assertEqual(result["severity"], "critical")
+        row = result["tools"][1]
+        self.assertEqual(row["tool"], 6)
+        self.assertEqual(row["slicer"], {"color": "00ff00", "material": "PLA", "temp": "215"})
+        self.assertEqual([i["severity"] for i in row["issues"]], ["critical", "warning"])
+        self.assertEqual(result["tools"][0]["issues"], [])
 
     def test_empty_gate_is_critical(self):
         gates = [{"index": 0, "status": 0, "status_text": "Empty", "material": "ABS+",

@@ -293,7 +293,9 @@ class HappyHarePlugin(
 
     def hook_action(self, comm_instance, line, action, name=None, params=None, *args, **kwargs):
         """Render Klipper prompts, and accept the serial fallback state channel."""
-        action = action or ""
+        # OctoPrint passes the whole action command as `action`
+        # ("prompt_begin Happy Hare Error Notice") and its first word as `name`
+        action = name or (action or "").split(" ", 1)[0]
         params = params or ""
 
         if action.startswith("hh_state"):
@@ -688,9 +690,10 @@ class HappyHarePlugin(
         for position, tool in enumerate(metadata.get("tools") or []):
             gate_index = ttg[tool] if tool < len(ttg) else None
             gate = gates.get(gate_index, {})
-            slicer_color = _at(metadata.get("colors"), position, "")
-            slicer_material = _at(metadata.get("materials"), position, "")
-            slicer_temp = _at(metadata.get("temps"), position, "")
+            # the slicer lists hold every extruder, indexed by tool number
+            slicer_color = _at(metadata.get("colors"), tool, "")
+            slicer_material = _at(metadata.get("materials"), tool, "")
+            slicer_temp = _at(metadata.get("temps"), tool, "")
             row_issues = []
 
             if gate_index is None:
