@@ -175,13 +175,25 @@ class HappyHarePlugin(
                 # Happy Hare can answer the first subscription before the gate
                 # arrays exist; ask again rather than rendering an empty map.
                 self._spawn(self._requery, "happyhare-requery")
-            self._model = model.normalize(self._status, self._config_mmu,
-                                          self._status.get("save_variables"))
-            self._dirty = True
+            self._renormalize()
         if is_snapshot:
             # queries must not run on the socket thread: request() waits for that
             # same thread to pump the reply
             self._spawn(self._load_config, "happyhare-config")
+
+    def _renormalize(self):
+        """Rebuild the model, and mark it for pushing only if it changed.
+
+        Klipper reports every subscribed object on each status tick, and most
+        ticks only carry ones the model does not use (the extruder temperature,
+        print_stats). Pushing on all of them re-rendered an unchanged panel in
+        every open browser several times a second. Call with the lock held.
+        """
+        updated = model.normalize(self._status, self._config_mmu,
+                                  self._status.get("save_variables"))
+        if updated != self._model:
+            self._model = updated
+            self._dirty = True
 
     @staticmethod
     def _spawn(target, name):
@@ -402,9 +414,7 @@ class HappyHarePlugin(
             return
         with self._model_lock:
             model.merge_status(self._status, {"mmu": data})
-            self._model = model.normalize(self._status, self._config_mmu,
-                                          self._status.get("save_variables"))
-            self._dirty = True
+            self._renormalize()
 
     # ------------------------------------------------------------------
     # Pushing state to the browser

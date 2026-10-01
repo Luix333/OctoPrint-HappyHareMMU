@@ -333,5 +333,56 @@ class TestPreflight(unittest.TestCase):
         self.assertFalse(result["ok"])
 
 
+class TestPushOnlyOnChange(unittest.TestCase):
+    """A Klipper tick that leaves the MMU model as it was must not reach browsers."""
+
+    MMU = {"enabled": True, "num_gates": 2, "gate": 0, "tool": 0, "filament_pos": 10,
+           "print_state": "printing", "action": "Idle", "ttg_map": [0, 1],
+           "gate_status": [1, 2], "gate_color": ["ff0000", "000000"],
+           "encoder": {"headroom": 7.4, "flow_rate": 100}}
+
+    def _plugin(self):
+        plugin = make_plugin()
+        pushed = []
+        plugin._plugin_manager = types.SimpleNamespace(
+            send_plugin_message=lambda identifier, payload: pushed.append(payload))
+        plugin._on_status({"mmu": dict(self.MMU), "extruder": {"temperature": 240.1}}, False)
+        plugin._push_if_dirty()
+        return plugin, pushed
+
+    def test_first_status_is_pushed(self):
+        _plugin, pushed = self._plugin()
+        self.assertEqual([p["type"] for p in pushed], ["state"])
+
+    def test_tick_without_mmu_changes_is_not_pushed(self):
+        plugin, pushed = self._plugin()
+        plugin._on_status({"extruder": {"temperature": 240.3}}, False)
+        plugin._on_status({"print_stats": {"print_duration": 812.5}}, False)
+        plugin._push_if_dirty()
+        self.assertEqual(len(pushed), 1)
+
+    def test_repeated_mmu_values_are_not_pushed(self):
+        plugin, pushed = self._plugin()
+        plugin._on_status({"mmu": {"gate": 0, "action": "Idle"}}, False)
+        plugin._push_if_dirty()
+        self.assertEqual(len(pushed), 1)
+
+    def test_live_encoder_change_is_pushed(self):
+        plugin, pushed = self._plugin()
+        plugin._on_status({"mmu": {"encoder": {"headroom": 6.9, "flow_rate": 100}}}, False)
+        plugin._push_if_dirty()
+        self.assertEqual(len(pushed), 2)
+        self.assertEqual(pushed[-1]["state"]["encoder"]["headroom"], 6.9)
+
+    def test_fallback_channel_follows_the_same_rule(self):
+        plugin, pushed = self._plugin()
+        plugin.hook_action(None, "", "hh_state", "hh_state", '{"gate": 0}')
+        plugin._push_if_dirty()
+        self.assertEqual(len(pushed), 1)
+        plugin.hook_action(None, "", "hh_state", "hh_state", '{"gate": 1}')
+        plugin._push_if_dirty()
+        self.assertEqual(len(pushed), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -37,9 +37,69 @@ $(function () {
         return node;
     }
 
-    function text(node, value) { if (node) node.textContent = value === undefined ? "" : value; }
     function clear(node) { while (node && node.firstChild) node.removeChild(node.firstChild); }
     function byId(id) { return document.getElementById(id); }
+
+    /*
+     * Write-if-different setters. The server pushes the model several times a
+     * second while a print runs (the encoder fields change on every Klipper
+     * tick), and a DOM write queues a mutation and a restyle even when it stores
+     * the value already there. Everything that runs per push goes through these,
+     * so an unchanged value costs a read and nothing else.
+     */
+    function text(node, value) {
+        if (!node) return;
+        value = value === undefined || value === null ? "" : String(value);
+        if (node.textContent !== value) node.textContent = value;
+    }
+
+    function attr(node, name, value) {
+        if (!node) return;
+        if (value === null || value === undefined) {
+            if (node.hasAttribute(name)) node.removeAttribute(name);
+        } else if (node.getAttribute(name) !== String(value)) {
+            node.setAttribute(name, value);
+        }
+    }
+
+    // properties such as hidden, disabled, className and title
+    function prop(node, name, value) {
+        if (node && node[name] !== value) node[name] = value;
+    }
+
+    // the browser normalises what style stores, so compare with what was written
+    function css(node, name, value) {
+        if (!node) return;
+        var written = node.hhStyle || (node.hhStyle = {});
+        if (written[name] === value) return;
+        written[name] = value;
+        node.style[name] = value;
+    }
+
+    function show(node, visible) { attr(node, "display", visible ? null : "none"); }
+
+    /*
+     * Keep a container's children in step with a list. The node at each position
+     * is built once by `make` and refilled by `fill` through the setters above,
+     * so a list whose items did not change is left alone and only a change in
+     * length adds or removes nodes.
+     */
+    function syncList(box, items, make, fill) {
+        if (!box) return;
+        if (!box.hhList) {
+            clear(box);
+            box.hhList = true;
+        }
+        while (box.children.length > items.length) box.removeChild(box.lastElementChild);
+        items.forEach(function (item, index) {
+            var node = box.children[index];
+            if (!node) {
+                node = make();
+                box.appendChild(node);
+            }
+            fill(node, item, index);
+        });
+    }
 
     function esLetter(group) {
         return String.fromCharCode(64 + (group || 0));
@@ -69,7 +129,6 @@ $(function () {
         self.errorsBlocked = 0;
         self.view = "operate";
         self.recoveryStep = 0;
-        self.railCache = null;
         self.preflightFiles = [];
 
         self.linkText = ko.observable("not connected");
@@ -135,9 +194,7 @@ $(function () {
                     self.applyState(data.state);
                     break;
                 case "console":
-                    self.consoleLines.push(data.line);
-                    if (self.consoleLines.length > 300) self.consoleLines.shift();
-                    self.renderConsole();
+                    self.appendConsole(data.line);
                     break;
                 case "prompt":
                     self.prompt = data.prompt;
@@ -229,7 +286,7 @@ $(function () {
             var box = byId("hh-offline");
             if (!box) return;
             var available = self.state && self.state.available;
-            box.hidden = !!available;
+            prop(box, "hidden", !!available);
             if (!available) {
                 text(byId("hh-offline-reason"),
                     self.link && self.link.connected
@@ -241,7 +298,6 @@ $(function () {
         self.renderStrip = function () {
             var box = byId("hh-strip");
             if (!box || !self.state.available) return;
-            clear(box);
             var state = self.state;
             var tiles = [
                 ["Print state", state.print_state || "—", state.locked ? "crit" : state.printing ? "ok" : ""],
@@ -261,37 +317,40 @@ $(function () {
                 tiles.push(["Selector", state.servo ? "servo " + String(state.servo).toLowerCase()
                     : (state.grip || "—"), ""]);
             }
-            tiles.forEach(function (tile) {
-                box.appendChild(el("div", {class: "hh-tile" + (tile[2] ? " sev-" + tile[2] : "")}, [
-                    el("span", {class: "hh-label", text: tile[0]}),
-                    el("b", {text: String(tile[1])})
-                ]));
+            syncList(box, tiles, function () {
+                return el("div", {class: "hh-tile"}, [el("span", {class: "hh-label"}), el("b")]);
+            }, function (node, tile) {
+                prop(node, "className", "hh-tile" + (tile[2] ? " sev-" + tile[2] : ""));
+                text(node.firstChild, tile[0]);
+                text(node.lastChild, tile[1]);
             });
         };
 
         // -- selector rail / lanes ----------------------------------------
+        // everything buildRail draws; the rest (selection, carriage) is updateRail's
         self.railSignature = function () {
             var state = self.state;
-            return [self.compact, state.num_gates, state.selector_type,
+            return JSON.stringify([self.compact, state.num_gates, state.selector_type, state.vendor,
+                state.hw_version, state.has_selector, state.has_bypass, state.selector_offsets,
                 (state.gates || []).map(function (gate) {
-                    return [gate.color, gate.status, gate.material, gate.group, gate.tools.join("/")].join(",");
-                }).join("|")].join("#");
+                    return [gate.rgb, gate.status, gate.status_text, gate.dark, gate.material,
+                        gate.temperature, gate.group, gate.tools];
+                })]);
         };
 
         self.renderRail = function () {
             var box = byId("hh-rail");
             if (!box || !self.state.available) return;
+            // the cache lives on the box, so every instance of this view model
+            // updates the one drawing instead of rebuilding it in turn
+            var cache = box.hhRail;
             var signature = self.railSignature();
-            if (self.railCache && self.railCache.signature === signature) {
-                self.updateRail();
-                return;
-            }
-            self.buildRail(signature);
+            if (!cache || cache.signature !== signature) self.buildRail(signature);
             self.updateRail();
         };
 
         self.updateRail = function () {
-            var cache = self.railCache;
+            var cache = byId("hh-rail").hhRail;
             if (!cache) return;
             var state = self.state;
             text(byId("hh-rail-hint"), state.has_selector
@@ -300,14 +359,14 @@ $(function () {
                 : "one gear per lane · no selector");
             cache.plates.forEach(function (plate, index) {
                 var selected = index === state.gate;
-                plate.setAttribute("fill", selected ? "var(--hh-accent-soft)" : "var(--hh-surface-2)");
-                plate.setAttribute("stroke", selected ? "var(--hh-accent)" : "var(--hh-line)");
-                plate.setAttribute("stroke-width", selected ? 2 : 1);
+                attr(plate, "fill", selected ? "var(--hh-accent-soft)" : "var(--hh-surface-2)");
+                attr(plate, "stroke", selected ? "var(--hh-accent)" : "var(--hh-line)");
+                attr(plate, "stroke-width", selected ? 2 : 1);
             });
             if (cache.carriage) {
                 var target = state.gate >= 0 ? cache.gx(state.gate)
                     : (state.gate === -2 && cache.bypassX ? cache.bypassX : cache.gx(0));
-                cache.carriage.style.transform = "translateX(" + (target - cache.baseX) + "px)";
+                css(cache.carriage, "transform", "translateX(" + (target - cache.baseX) + "px)");
                 text(cache.servoLabel, state.servo === "Down" ? "GRIP"
                     : state.servo === "Move" ? "MOVE" : state.servo === "Up" ? "UP"
                     : (state.grip === "Gripped" ? "GRIP" : "—"));
@@ -466,7 +525,7 @@ $(function () {
             }
 
             box.appendChild(root);
-            self.railCache = cache;
+            box.hhRail = cache;
         };
 
         // -- filament path -------------------------------------------------
@@ -489,11 +548,24 @@ $(function () {
             return X.nozzle;
         };
 
+        // what buildPath draws; the values along the path are updatePath's
+        self.pathSignature = function () {
+            return JSON.stringify([self.compact, (self.state.sensors || []).map(function (sensor) {
+                return sensor.id;
+            })]);
+        };
+
         self.renderPath = function () {
             var box = byId("hh-path");
             if (!box || !self.state.available) return;
-            clear(box);
-            var state = self.state;
+            var cache = box.hhPath;
+            var signature = self.pathSignature();
+            if (!cache || cache.signature !== signature) self.buildPath(signature);
+            self.updatePath();
+        };
+
+        self.buildPath = function (signature) {
+            var box = byId("hh-path");
             var compact = self.compact;
             var X = PATH_X;
             // headroom above the path for the sensor labels, below it for the stops
@@ -503,147 +575,174 @@ $(function () {
             var subSize = compact ? 12 : 13;
             var root = svg("svg", {viewBox: "0 0 1000 " + height, role: "img",
                 "aria-label": "Filament path"});
+            var add = function (node) { root.appendChild(node); return node; };
+            var cache = {signature: signature, y: y, dots: []};
+            var sensorIds = (self.state.sensors || []).map(function (sensor) { return sensor.id; });
+
+            add(svg("rect", {x: X.gate - 14, y: y - 13,
+                width: (X.nozzle - X.gate) + 30, height: 26, rx: 13,
+                fill: "var(--hh-surface-2)", stroke: "var(--hh-line)"}));
+            add(svg("rect", {x: X.bstart, y: y - 13, width: X.bend - X.bstart,
+                height: 26, fill: "var(--hh-surface-3)", opacity: "0.75"}));
+
+            // drawn once and shown or hidden per push, so a push only edits attributes
+            cache.fill = add(svg("line", {x1: X.gate, y1: y, y2: y, "stroke-width": 13,
+                "stroke-linecap": "round"}));
+            cache.arrow = add(svg("path", {fill: "var(--hh-accent)"}));
+            cache.unknown = add(svg("text", {x: (X.gate + X.bend) / 2, y: y + 5,
+                "text-anchor": "middle", "font-size": 13, "font-weight": "600",
+                fill: "var(--hh-warn)"}));
+            cache.unknown.textContent = "filament position unknown";
+
+            // a stop along the path; returns the node for its second line, if it has one
+            var mark = function (x, label, withSub) {
+                add(svg("line", {x1: x, y1: y + 16, x2: x, y2: y + 27, stroke: "var(--hh-line)"}));
+                add(svg("text", {x: x, y: y + 44, "text-anchor": "middle",
+                    "font-size": labelSize, "font-weight": "500", fill: "var(--hh-ink)"}))
+                    .textContent = label;
+                if (!withSub || compact) return null;
+                return add(svg("text", {x: x, y: y + 62, "text-anchor": "middle",
+                    "font-size": subSize, fill: "var(--hh-muted)"}));
+            };
+
+            // the first of `ids` that this machine has
+            var sensorDot = function (x, ids) {
+                if (!ids.some(function (id) { return sensorIds.indexOf(id) >= 0; })) return;
+                cache.dots.push({ids: ids,
+                    circle: add(svg("circle", {cx: x, cy: y - 30, r: 8, "stroke-width": 2})),
+                    label: add(svg("text", {x: x, y: y - 46, "text-anchor": "middle",
+                        "font-size": subSize, "font-weight": "500"}))});
+            };
+
+            add(svg("rect", {x: X.gate - 32, y: y - 30, width: 34, height: 60, rx: 7,
+                fill: "var(--hh-surface-2)", stroke: "var(--hh-line)"}));
+            cache.gateLabel = add(svg("text", {x: X.gate - 15, y: y + 4, "text-anchor": "middle",
+                "font-size": 11, "font-weight": "600", fill: "var(--hh-ink)"}));
+            var park = mark(X.gate, "gate", true);
+            if (park) park.textContent = "park";
+            sensorDot(X.gate + 34, ["gate_entry", "gate_shared"]);
+
+            add(svg("circle", {cx: X.encoder, cy: y, r: 16, fill: "none",
+                stroke: "var(--hh-accent)", "stroke-width": 2.5, "stroke-dasharray": "5 4"}));
+            cache.flow = mark(X.encoder, "encoder", true);
+
+            cache.bowden = mark((X.bstart + X.bend) / 2, "bowden", true);
+            cache.progressTrack = add(svg("rect", {x: X.bstart, y: y + 20, width: X.bend - X.bstart,
+                height: 5, rx: 2.5, fill: "var(--hh-surface-3)"}));
+            cache.progressBar = add(svg("rect", {x: X.bstart, y: y + 20, height: 5, rx: 2.5,
+                fill: "var(--hh-accent)"}));
+
+            sensorDot(X.entry, ["extruder"]);
+            mark(X.entry, "entry", false);
+
+            [-1, 1].forEach(function (side) {
+                add(svg("circle", {cx: X.gears, cy: y + side * 21, r: 13,
+                    fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)", "stroke-width": 2}));
+                add(svg("circle", {cx: X.gears, cy: y + side * 21, r: 5, fill: "var(--hh-ink-2)"}));
+            });
+            cache.synced = mark(X.gears, "extruder", true);
+
+            sensorDot(X.ts, ["toolhead"]);
+            mark(X.ts, "toolhead", false);
+
+            add(svg("path", {d: "M" + (X.nozzle - 16) + " " + (y - 20)
+                + " h32 l-10 26 h-12 Z", fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)",
+                "stroke-width": 2}));
+            mark(X.nozzle, "nozzle", false);
+
+            clear(box);
+            box.appendChild(root);
+            box.hhPath = cache;
+        };
+
+        self.updatePath = function () {
+            var cache = byId("hh-path").hhPath;
+            var state = self.state;
+            var X = PATH_X;
+            var y = cache.y;
 
             text(byId("hh-path-hint"), (state.bowden_length ? "bowden "
                 + Math.round(state.bowden_length) + " mm" : "")
                 + (state.bowden_progress >= 0 ? " · " + state.bowden_progress + "%" : ""));
 
-            root.appendChild(svg("rect", {x: X.gate - 14, y: y - 13,
-                width: (X.nozzle - X.gate) + 30, height: 26, rx: 13,
-                fill: "var(--hh-surface-2)", stroke: "var(--hh-line)"}));
-            root.appendChild(svg("rect", {x: X.bstart, y: y - 13, width: X.bend - X.bstart,
-                height: 26, fill: "var(--hh-surface-3)", opacity: "0.75"}));
-
             var known = state.filament_pos >= 0;
             var gate = (state.gates || [])[state.gate];
-            if (known) {
-                var fill = self.pathFillX();
-                if (fill > X.gate) {
-                    root.appendChild(svg("line", {x1: X.gate, y1: y, x2: fill, y2: y,
-                        stroke: (gate && gate.rgb) || "var(--hh-muted)", "stroke-width": 13,
-                        "stroke-linecap": "round"}));
-                }
-                if (state.filament_direction) {
-                    var ax = Math.min(Math.max(fill, X.gate + 30), X.nozzle - 10);
-                    var dir = state.filament_direction;
-                    root.appendChild(svg("path", {d: "M" + ax + " " + (y - 26) + " l" + (14 * dir)
-                        + " 9 l" + (-14 * dir) + " 9 Z", fill: "var(--hh-accent)"}));
-                }
-            } else {
-                var unknown = svg("text", {x: (X.gate + X.bend) / 2, y: y + 5,
-                    "text-anchor": "middle", "font-size": 13, "font-weight": "600",
-                    fill: "var(--hh-warn)"});
-                unknown.textContent = "filament position unknown";
-                root.appendChild(unknown);
+            var fill = known ? self.pathFillX() : X.gate;
+            show(cache.fill, known && fill > X.gate);
+            if (known && fill > X.gate) {
+                attr(cache.fill, "x2", fill);
+                attr(cache.fill, "stroke", (gate && gate.rgb) || "var(--hh-muted)");
             }
+            var dir = known ? state.filament_direction : 0;
+            show(cache.arrow, !!dir);
+            if (dir) {
+                var ax = Math.min(Math.max(fill, X.gate + 30), X.nozzle - 10);
+                attr(cache.arrow, "d", "M" + ax + " " + (y - 26) + " l" + (14 * dir)
+                    + " 9 l" + (-14 * dir) + " 9 Z");
+            }
+            show(cache.unknown, !known);
 
-            var mark = function (x, label, sub) {
-                root.appendChild(svg("line", {x1: x, y1: y + 16, x2: x, y2: y + 27,
-                    stroke: "var(--hh-line)"}));
-                var main = svg("text", {x: x, y: y + 44, "text-anchor": "middle",
-                    "font-size": labelSize, "font-weight": "500", fill: "var(--hh-ink)"});
-                main.textContent = label;
-                root.appendChild(main);
-                if (sub && !compact) {
-                    var second = svg("text", {x: x, y: y + 62, "text-anchor": "middle",
-                        "font-size": subSize, fill: "var(--hh-muted)"});
-                    second.textContent = sub;
-                    root.appendChild(second);
-                }
+            text(cache.gateLabel, state.gate >= 0 ? "G" + state.gate
+                : state.gate === -2 ? "BP" : "—");
+            var sub = function (node, value) {
+                if (!node) return;
+                show(node, !!value);
+                text(node, value);
             };
+            sub(cache.flow, state.encoder && state.encoder.flow_rate !== undefined
+                ? state.encoder.flow_rate + "% flow" : null);
+            sub(cache.bowden, state.bowden_length ? Math.round(state.bowden_length) + " mm" : null);
+            sub(cache.synced, state.sync_drive ? "synced" : null);
 
-            var sensorDot = function (x, sensor) {
-                if (!sensor) return;
-                var on = sensor.state === true;
-                var off = sensor.state === false;
-                root.appendChild(svg("circle", {cx: x, cy: y - 30, r: 8,
-                    fill: on ? "var(--hh-ok)" : "var(--hh-surface)",
-                    stroke: on ? "var(--hh-ok)" : off ? "var(--hh-line)" : "var(--hh-muted)",
-                    "stroke-width": 2, "stroke-dasharray": sensor.state === null ? "2 2" : null}));
-                var label = svg("text", {x: x, y: y - 46, "text-anchor": "middle",
-                    "font-size": subSize, "font-weight": "500",
-                    fill: on ? "var(--hh-ok)" : "var(--hh-muted)"});
-                label.textContent = sensor.label;
-                root.appendChild(label);
-            };
+            var progress = state.bowden_progress >= 0;
+            show(cache.progressTrack, progress);
+            show(cache.progressBar, progress);
+            if (progress) {
+                attr(cache.progressBar, "width", (X.bend - X.bstart) * (state.bowden_progress / 100));
+            }
 
             var sensors = {};
             (state.sensors || []).forEach(function (sensor) { sensors[sensor.id] = sensor; });
-
-            root.appendChild(svg("rect", {x: X.gate - 32, y: y - 30, width: 34, height: 60, rx: 7,
-                fill: "var(--hh-surface-2)", stroke: "var(--hh-line)"}));
-            var gateLabel = svg("text", {x: X.gate - 15, y: y + 4, "text-anchor": "middle",
-                "font-size": 11, "font-weight": "600", fill: "var(--hh-ink)"});
-            gateLabel.textContent = state.gate >= 0 ? "G" + state.gate
-                : state.gate === -2 ? "BP" : "—";
-            root.appendChild(gateLabel);
-            mark(X.gate, "gate", "park");
-            sensorDot(X.gate + 34, sensors.gate_entry || sensors.gate_shared);
-
-            root.appendChild(svg("circle", {cx: X.encoder, cy: y, r: 16, fill: "none",
-                stroke: "var(--hh-accent)", "stroke-width": 2.5, "stroke-dasharray": "5 4"}));
-            mark(X.encoder, "encoder", state.encoder && state.encoder.flow_rate !== undefined
-                ? state.encoder.flow_rate + "% flow" : null);
-
-            mark((X.bstart + X.bend) / 2, "bowden",
-                state.bowden_length ? Math.round(state.bowden_length) + " mm" : null);
-            if (state.bowden_progress >= 0) {
-                root.appendChild(svg("rect", {x: X.bstart, y: y + 20, width: X.bend - X.bstart,
-                    height: 5, rx: 2.5, fill: "var(--hh-surface-3)"}));
-                root.appendChild(svg("rect", {x: X.bstart, y: y + 20,
-                    width: (X.bend - X.bstart) * (state.bowden_progress / 100), height: 5, rx: 2.5,
-                    fill: "var(--hh-accent)"}));
-            }
-
-            sensorDot(X.entry, sensors.extruder);
-            mark(X.entry, "entry", null);
-
-            [-1, 1].forEach(function (side) {
-                root.appendChild(svg("circle", {cx: X.gears, cy: y + side * 21, r: 13,
-                    fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)", "stroke-width": 2}));
-                root.appendChild(svg("circle", {cx: X.gears, cy: y + side * 21, r: 5,
-                    fill: "var(--hh-ink-2)"}));
+            cache.dots.forEach(function (dot) {
+                var sensor = null;
+                dot.ids.some(function (id) { sensor = sensors[id]; return !!sensor; });
+                if (!sensor) return;
+                var on = sensor.state === true;
+                var off = sensor.state === false;
+                attr(dot.circle, "fill", on ? "var(--hh-ok)" : "var(--hh-surface)");
+                attr(dot.circle, "stroke", on ? "var(--hh-ok)" : off ? "var(--hh-line)" : "var(--hh-muted)");
+                attr(dot.circle, "stroke-dasharray", sensor.state === null ? "2 2" : null);
+                attr(dot.label, "fill", on ? "var(--hh-ok)" : "var(--hh-muted)");
+                text(dot.label, sensor.label);
             });
-            mark(X.gears, "extruder", state.sync_drive ? "synced" : null);
-
-            sensorDot(X.ts, sensors.toolhead);
-            mark(X.ts, "toolhead", null);
-
-            root.appendChild(svg("path", {d: "M" + (X.nozzle - 16) + " " + (y - 20)
-                + " h32 l-10 26 h-12 Z", fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)",
-                "stroke-width": 2}));
-            mark(X.nozzle, "nozzle", null);
-
-            box.appendChild(root);
         };
 
         // -- tools and actions --------------------------------------------
         self.renderTools = function () {
             var box = byId("hh-tools");
             if (!box || !self.state.available) return;
-            clear(box);
             var state = self.state;
             var blocked = (state.printing && !state.paused) || state.busy || !self.canControl();
-            (state.ttg_map || []).forEach(function (gateIndex, tool) {
+            syncList(box, state.ttg_map || [], function () {
+                // reads its tool from the node, which the next fill keeps current
+                return el("button", {class: "hh-tool", onclick: function () {
+                    var tool = this.hhTool;
+                    self.command("change_tool", {tool: tool},
+                        "Change to tool T" + tool + " (gate " + this.hhGate + ")?");
+                }}, [el("span", {class: "hh-swatch"}), el("span")]);
+            }, function (button, gateIndex, tool) {
                 var gate = (state.gates || [])[gateIndex] || {};
-                var button = el("button", {
-                    class: "hh-tool" + (tool === state.tool ? " on" : ""),
-                    title: "MMU_CHANGE_TOOL TOOL=" + tool + " (gate " + gateIndex + ")",
-                    onclick: function () {
-                        self.command("change_tool", {tool: tool},
-                            "Change to tool T" + tool + " (gate " + gateIndex + ")?");
-                    }
-                }, [
-                    el("span", {class: "hh-swatch", style: "background:" + (gate.rgb || "transparent")}),
-                    el("span", {text: "T" + tool})
-                ]);
-                button.disabled = blocked;
-                box.appendChild(button);
+                button.hhTool = tool;
+                button.hhGate = gateIndex;
+                prop(button, "className", "hh-tool" + (tool === state.tool ? " on" : ""));
+                prop(button, "title", "MMU_CHANGE_TOOL TOOL=" + tool + " (gate " + gateIndex + ")");
+                css(button.firstChild, "background", gate.rgb || "transparent");
+                text(button.lastChild, "T" + tool);
+                prop(button, "disabled", !!blocked);
             });
 
             var actions = byId("hh-actions");
             if (!actions) return;
-            clear(actions);
             var busy = (state.printing && !state.paused) || !self.canControl();
             var buttons = [
                 ["Home", "home", "Home the MMU selector?", busy],
@@ -656,11 +755,14 @@ $(function () {
             if (state.has_bypass) {
                 buttons.splice(3, 0, ["Select bypass", "select_bypass", "Select the bypass?", busy]);
             }
-            buttons.forEach(function (spec) {
-                var button = el("button", {class: "btn btn-small", text: spec[0],
-                    onclick: function () { self.command(spec[1], {}, spec[2]); }});
-                button.disabled = spec[3];
-                actions.appendChild(button);
+            syncList(actions, buttons, function () {
+                return el("button", {class: "btn btn-small", onclick: function () {
+                    self.command(this.hhSpec[1], {}, this.hhSpec[2]);
+                }});
+            }, function (button, spec) {
+                button.hhSpec = spec;
+                text(button, spec[0]);
+                prop(button, "disabled", !!spec[3]);
             });
         };
 
@@ -700,7 +802,7 @@ $(function () {
             var spool = byId("hh-side-spool");
             if (!spool) return;
             var gate = (state.gates || [])[state.gate];
-            spool.style.background = (gate && gate.rgb) || "var(--hh-surface-3)";
+            css(spool, "background", (gate && gate.rgb) || "var(--hh-surface-3)");
             text(byId("hh-side-tool"), state.available
                 ? "Tool " + (state.tool < 0 ? "?" : state.tool) + " · Gate "
                     + (state.gate < 0 ? "?" : state.gate)
@@ -714,33 +816,35 @@ $(function () {
 
             var badge = byId("hh-side-state");
             if (badge) {
-                badge.textContent = state.print_state || "";
-                badge.className = "hh-badge " + (state.locked ? "crit" : state.paused ? "warn"
-                    : state.printing ? "ok" : "mute");
+                text(badge, state.print_state || "");
+                prop(badge, "className", "hh-badge " + (state.locked ? "crit" : state.paused ? "warn"
+                    : state.printing ? "ok" : "mute"));
             }
 
+            // the one genuinely live value: headroom moves on every tick while printing
             var encoderBox = byId("hh-side-encoder");
             if (encoderBox) {
                 var encoder = state.encoder || {};
                 var has = encoder.headroom !== undefined;
-                encoderBox.hidden = !has;
+                prop(encoderBox, "hidden", !has);
                 if (has) {
                     text(byId("hh-side-headroom"), encoder.headroom.toFixed
                         ? encoder.headroom.toFixed(1) + " mm" : encoder.headroom + " mm");
                     var bar = byId("hh-side-headroom-bar");
                     var reference = encoder.detection_length || (encoder.desired_headroom * 2) || 10;
-                    var pct = Math.max(0, Math.min(100, (encoder.headroom / reference) * 100));
-                    bar.style.width = pct + "%";
-                    bar.style.background = encoder.headroom < encoder.desired_headroom
-                        ? "var(--hh-warn)" : "var(--hh-ok)";
+                    // whole percent: finer steps are sub-pixel on a sidebar-wide meter
+                    var pct = Math.round(Math.max(0, Math.min(100, (encoder.headroom / reference) * 100)));
+                    css(bar, "width", pct + "%");
+                    css(bar, "background", encoder.headroom < encoder.desired_headroom
+                        ? "var(--hh-warn)" : "var(--hh-ok)");
                 }
             }
 
             var unload = byId("hh-side-unload");
             var recover = byId("hh-side-recover");
-            if (unload) unload.disabled = !state.available || (state.printing && !state.paused)
-                || !self.canControl();
-            if (recover) recover.disabled = !state.paused || !self.canControl();
+            prop(unload, "disabled", !!(!state.available || (state.printing && !state.paused)
+                || !self.canControl()));
+            prop(recover, "disabled", !!(!state.paused || !self.canControl()));
         };
 
         self.renderNavbar = function () {
@@ -754,21 +858,21 @@ $(function () {
             var show = self.settingValue("show_navbar", true);
             [byId("navbar_plugin_happyhare"), item].forEach(function (node) {
                 if (!node) return;
-                node.hidden = !show;
-                node.style.display = show ? "" : "none";
+                prop(node, "hidden", !show);
+                css(node, "display", show ? "" : "none");
             });
             if (!swatch || !label) return;
             var gate = (state.gates || [])[state.gate];
-            swatch.style.background = (gate && gate.rgb) || "transparent";
+            css(swatch, "background", (gate && gate.rgb) || "transparent");
             if (!state.available) {
-                label.textContent = "MMU";
+                text(label, "MMU");
             } else if (state.paused) {
-                label.textContent = "MMU paused";
+                text(label, "MMU paused");
             } else if (state.busy) {
-                label.textContent = state.action;
+                text(label, state.action);
             } else {
-                label.textContent = "T" + (state.tool < 0 ? "?" : state.tool)
-                    + " → G" + (state.gate < 0 ? "?" : state.gate);
+                text(label, "T" + (state.tool < 0 ? "?" : state.tool)
+                    + " → G" + (state.gate < 0 ? "?" : state.gate));
             }
             if (item) item.classList.toggle("hh-alarm", !!state.paused);
         };
@@ -786,18 +890,15 @@ $(function () {
             var box = byId("hh-sensors-list");
             if (!card || !box) return;
             if (!self.settingValue("show_sensors", true)) {
-                card.style.display = "none";
+                css(card, "display", "none");
                 return;
             }
-            card.style.display = "";
-            clear(box);
+            css(card, "display", "");
 
             var state = self.state;
+            var rows = [];
             var row = function (label, badgeClass, badgeText, title) {
-                box.appendChild(el("div", {class: "hh-sensor-row", title: title || ""}, [
-                    el("span", {class: "hh-sensor-name", text: label}),
-                    el("span", {class: "hh-badge " + badgeClass, text: badgeText})
-                ]));
+                rows.push([label, badgeClass, badgeText, title || ""]);
             };
 
             (state.sensors || []).forEach(function (sensor) {
@@ -811,9 +912,9 @@ $(function () {
 
             var encoder = state.encoder || {};
             if (encoder.flow_rate !== undefined || encoder.headroom !== undefined) {
-                var text = encoder.enabled === false ? "disabled"
+                var flow = encoder.enabled === false ? "disabled"
                     : (encoder.flow_rate !== undefined ? encoder.flow_rate + "% flow" : "active");
-                row("Encoder", encoder.enabled === false ? "mute" : "ok", text,
+                row("Encoder", encoder.enabled === false ? "mute" : "ok", flow,
                     encoder.headroom !== undefined ? "headroom " + encoder.headroom + " mm" : "");
             }
 
@@ -834,13 +935,25 @@ $(function () {
                         ? "last Z result " + state.probe.last_z_result : "");
             }
 
+            syncList(box, rows, function () {
+                return el("div", {class: "hh-sensor-row"}, [
+                    el("span", {class: "hh-sensor-name"}),
+                    el("span", {class: "hh-badge"})
+                ]);
+            }, function (node, spec) {
+                prop(node, "title", spec[3]);
+                text(node.firstChild, spec[0]);
+                prop(node.lastChild, "className", "hh-badge " + spec[1]);
+                text(node.lastChild, spec[2]);
+            });
+
             var button = byId("hh-sensors-refresh");
             if (button) {
                 var blocked = (state.printing && !state.paused) || !self.canControl();
-                button.disabled = !!blocked;
-                button.title = blocked
+                prop(button, "disabled", !!blocked);
+                prop(button, "title", blocked
                     ? "Not while printing — the queries go through the G-code queue"
-                    : "Runs QUERY_ENDSTOPS and QUERY_PROBE";
+                    : "Runs QUERY_ENDSTOPS and QUERY_PROBE");
             }
         };
 
@@ -858,57 +971,63 @@ $(function () {
             var panel = byId("hh-recovery");
             if (!panel) return;
             var state = self.state;
-            panel.hidden = !state.paused;
+            prop(panel, "hidden", !state.paused);
             if (!state.paused) return;
             text(byId("hh-recovery-reason"), state.reason_for_pause || "paused");
             var box = byId("hh-recovery-steps");
-            clear(box);
+            if (!box) return;
+            if (!box.hhSteps) box.hhSteps = self.buildRecovery(box);
 
-            var steps = [
-                {title: "Unlock", hint: "MMU_UNLOCK restores the hotend temperature and idle timeout",
-                 label: "Unlock", run: function () { self.command("unlock", {}); self.recoveryStep = 1; self.renderRecovery(); }},
-                {title: "Tell Happy Hare where the filament is",
-                 hint: "MMU_RECOVER LOADED=0/1 — pick what is actually true",
-                 label: null, run: null},
-                {title: "Resume the print", hint: "Runs RESUME through OctoPrint so the job follows",
-                 label: "Resume", run: function () { self.command("resume", {}); }}
-            ];
-
-            steps.forEach(function (step, index) {
+            var allowed = self.canControl();
+            box.hhSteps.forEach(function (step, index) {
                 var stateClass = index < self.recoveryStep ? "done"
                     : index === self.recoveryStep ? "now" : "";
-                var controls;
-                if (index === 1) {
-                    controls = el("span", {class: "hh-row"}, [
-                        el("button", {class: "btn btn-small", text: "Unloaded",
-                            onclick: function () {
-                                self.command("recover", {loaded: false});
-                                self.recoveryStep = 2;
-                                self.renderRecovery();
-                            }}),
-                        el("button", {class: "btn btn-small", text: "Loaded",
-                            onclick: function () {
-                                self.command("recover", {loaded: true});
-                                self.recoveryStep = 2;
-                                self.renderRecovery();
-                            }})
-                    ]);
-                    Array.prototype.forEach.call(controls.children, function (button) {
-                        button.disabled = index !== self.recoveryStep || !self.canControl();
-                    });
-                } else {
-                    controls = el("button", {class: "btn btn-small" + (stateClass === "now"
-                        ? " btn-primary" : ""), text: step.label, onclick: step.run});
-                    controls.disabled = index !== self.recoveryStep || !self.canControl();
-                }
-                box.appendChild(el("div", {class: "hh-step " + stateClass}, [
+                prop(step.node, "className", "hh-step " + stateClass);
+                step.buttons.forEach(function (button) {
+                    if (step.single) {
+                        prop(button, "className", "btn btn-small" + (stateClass === "now"
+                            ? " btn-primary" : ""));
+                    }
+                    prop(button, "disabled", index !== self.recoveryStep || !allowed);
+                });
+            });
+        };
+
+        // the three steps never change shape, so they are built once and restyled
+        self.buildRecovery = function (box) {
+            var advance = function (step) {
+                self.recoveryStep = step;
+                self.renderRecovery();
+            };
+            var steps = [
+                {title: "Unlock", hint: "MMU_UNLOCK restores the hotend temperature and idle timeout",
+                 buttons: [["Unlock", function () { self.command("unlock", {}); advance(1); }]]},
+                {title: "Tell Happy Hare where the filament is",
+                 hint: "MMU_RECOVER LOADED=0/1 — pick what is actually true",
+                 buttons: [
+                     ["Unloaded", function () { self.command("recover", {loaded: false}); advance(2); }],
+                     ["Loaded", function () { self.command("recover", {loaded: true}); advance(2); }]
+                 ]},
+                {title: "Resume the print", hint: "Runs RESUME through OctoPrint so the job follows",
+                 buttons: [["Resume", function () { self.command("resume", {}); }]]}
+            ];
+
+            clear(box);
+            return steps.map(function (step, index) {
+                var buttons = step.buttons.map(function (spec) {
+                    return el("button", {class: "btn btn-small", text: spec[0], onclick: spec[1]});
+                });
+                var single = buttons.length === 1;
+                var node = el("div", {class: "hh-step"}, [
                     el("span", {class: "hh-step-no", text: String(index + 1)}),
                     el("div", {}, [
                         el("p", {text: step.title}),
                         el("small", {class: "hh-hint", text: step.hint})
                     ]),
-                    controls
-                ]));
+                    single ? buttons[0] : el("span", {class: "hh-row"}, buttons)
+                ]);
+                box.appendChild(node);
+                return {node: node, buttons: buttons, single: single};
             });
         };
 
@@ -916,13 +1035,22 @@ $(function () {
         self.renderGateTable = function () {
             var table = byId("hh-gate-table");
             if (!table || !self.state.available) return;
+            var editable = self.canControl();
+            // rebuilt only when what it shows changes, which also keeps an
+            // unapplied edit in place across the pushes in between
+            var signature = JSON.stringify([editable, self.state.gate,
+                (self.state.gates || []).map(function (gate) {
+                    return [gate.index, gate.status, gate.rgb, gate.material, gate.temperature,
+                        gate.spool_id, gate.speed, gate.tools, gate.group];
+                })]);
+            if (table.hhSignature === signature) return;
             if (table.contains(document.activeElement)) return;   // do not fight an edit
+            table.hhSignature = signature;
             clear(table);
             var head = el("tr", {}, ["Gate", "Status", "Colour", "Material", "Temp", "Spool", "Speed",
                 "Tools", "ES", ""].map(function (label) { return el("th", {text: label}); }));
             table.appendChild(el("thead", {}, [head]));
             var body = el("tbody", {});
-            var editable = self.canControl();
 
             (self.state.gates || []).forEach(function (gate) {
                 var statusSelect = el("select", {}, [[1, "On spool"], [2, "Buffered"], [0, "Empty"],
@@ -974,18 +1102,25 @@ $(function () {
         self.renderTtgTable = function () {
             var table = byId("hh-ttg-table");
             if (!table || !self.state.available) return;
+            var state = self.state;
+            var editable = self.canControl();
+            var signature = JSON.stringify([editable, state.tool, state.ttg_map,
+                (state.gates || []).map(function (gate) {
+                    return [gate.index, gate.rgb, gate.material, gate.status_text, gate.group];
+                })]);
+            if (table.hhSignature === signature) return;
             if (table.contains(document.activeElement)) return;
+            table.hhSignature = signature;
             clear(table);
             table.appendChild(el("thead", {}, [el("tr", {}, ["Tool", "Gate", "Loaded",
                 "EndlessSpool group"].map(function (label) { return el("th", {text: label}); }))]));
             var body = el("tbody", {});
-            var state = self.state;
-            var editable = self.canControl();
 
             (state.ttg_map || []).forEach(function (gateIndex, tool) {
                 var gate = (state.gates || [])[gateIndex] || {};
+                // the handlers read the state current when they run, not at build time
                 var gateSelect = el("select", {onchange: function (event) {
-                    var mapping = (state.ttg_map || []).slice();
+                    var mapping = (self.state.ttg_map || []).slice();
                     mapping[tool] = parseInt(event.target.value, 10);
                     OctoPrint.simpleApiCommand("happyhare", "ttg_map", {map: mapping});
                 }}, (state.gates || []).map(function (candidate) {
@@ -993,7 +1128,7 @@ $(function () {
                         selected: candidate.index === gateIndex ? "selected" : null});
                 }));
                 var groupSelect = el("select", {onchange: function (event) {
-                    var groups = (state.endless_spool_groups || []).slice();
+                    var groups = (self.state.endless_spool_groups || []).slice();
                     groups[gateIndex] = parseInt(event.target.value, 10);
                     OctoPrint.simpleApiCommand("happyhare", "endless_spool",
                         {groups: groups, enable: true});
@@ -1023,82 +1158,99 @@ $(function () {
             var state = self.state;
             var quality = byId("hh-quality");
             if (!quality || !state.available) return;
-            clear(quality);
-            (state.gates || []).forEach(function (gate) {
+
+            // label, bar width, bar colour, figure, tooltip
+            var fillBar = function (node, bar) {
+                prop(node, "title", bar[4]);
+                text(node.children[0], bar[0]);
+                css(node.children[1].firstChild, "width", bar[1] + "%");
+                css(node.children[1].firstChild, "background", bar[2]);
+                text(node.children[2], bar[3]);
+            };
+            var makeBar = function () {
+                return el("div", {class: "hh-bar"}, [
+                    el("span"),
+                    el("span", {class: "hh-track"}, [el("i")]),
+                    el("span", {class: "hh-hint"})
+                ]);
+            };
+
+            syncList(quality, (state.gates || []).map(function (gate) {
                 var stats = gate.stats || {};
                 var value = stats.quality;
                 var known = value !== undefined && value >= 0;
                 var pct = known ? Math.max(4, Math.min(100, value * 100)) : 0;
                 var color = !known ? "var(--hh-line)" : value >= 0.95 ? "var(--hh-ok)"
                     : value >= 0.85 ? "var(--hh-warn)" : "var(--hh-crit)";
-                quality.appendChild(el("div", {class: "hh-bar"}, [
-                    el("span", {text: "G" + gate.index}),
-                    el("span", {class: "hh-track"}, [el("i", {style: "width:" + pct
-                        + "%;background:" + color})]),
-                    el("span", {class: "hh-hint", text: known
-                        ? Math.round(value * 100) + "% · " + (stats.loads || 0) + "L/"
-                            + (stats.load_failures || 0) + "F"
-                        : "no data"})
-                ]));
-            });
+                return ["G" + gate.index, pct, color, known
+                    ? Math.round(value * 100) + "% · " + (stats.loads || 0) + "L/"
+                        + (stats.load_failures || 0) + "F"
+                    : "no data", ""];
+            }), makeBar, fillBar);
 
-            var counters = byId("hh-counters");
-            clear(counters);
-            (state.counters || []).forEach(function (counter) {
+            syncList(byId("hh-counters"), (state.counters || []).map(function (counter) {
                 var limited = counter.limit > 0;
                 var pct = limited ? Math.min(100, (counter.count / counter.limit) * 100) : 0;
                 var color = pct > 85 ? "var(--hh-crit)" : pct > 60 ? "var(--hh-warn)" : "var(--hh-ok)";
-                counters.appendChild(el("div", {class: "hh-bar", title: counter.warning || ""}, [
-                    el("span", {text: counter.name}),
-                    el("span", {class: "hh-track"}, [el("i", {style: "width:" + pct
-                        + "%;background:" + color})]),
-                    el("span", {class: "hh-hint", text: limited
-                        ? counter.count + " / " + counter.limit : String(counter.count)})
-                ]));
-            });
+                return [counter.name, pct, color, limited
+                    ? counter.count + " / " + counter.limit : String(counter.count),
+                    counter.warning || ""];
+            }), makeBar, fillBar);
 
             var swaps = state.swap_stats || {};
             var parts = [["form_tip", "Form/cut tip", "#7f6bd4"], ["unload", "Unload", "#2d6a9f"],
                 ["load", "Load", "#2f7d5b"], ["purge", "Purge", "#a96908"],
                 ["post_load", "Post-load", "#5d748a"], ["pre_unload", "Pre-unload", "#bc3b2d"]];
             var total = parts.reduce(function (sum, part) { return sum + (swaps[part[0]] || 0); }, 0);
-            var stack = byId("hh-swap-stack");
-            var legend = byId("hh-swap-legend");
-            clear(stack);
-            clear(legend);
-            if (total > 0) {
-                parts.forEach(function (part) {
-                    var value = swaps[part[0]] || 0;
-                    stack.appendChild(el("i", {style: "width:" + (value / total * 100)
-                        + "%;background:" + part[2], title: part[1]}));
-                    legend.appendChild(el("span", {}, [
-                        el("i", {style: "background:" + part[2]}),
-                        el("span", {text: part[1] + " " + Math.round(value / 60) + " min"})
-                    ]));
+            var shown = total > 0 ? parts : [];
+            syncList(byId("hh-swap-stack"), shown, function () { return el("i"); },
+                function (node, part) {
+                    css(node, "width", ((swaps[part[0]] || 0) / total * 100) + "%");
+                    css(node, "background", part[2]);
+                    prop(node, "title", part[1]);
                 });
-                text(byId("hh-swap-total"), (swaps.total_swaps || 0) + " swaps · "
-                    + ((swaps.total || 0) / 3600).toFixed(1) + " h · "
-                    + (swaps.total_pauses || 0) + " pauses");
-            } else {
-                text(byId("hh-swap-total"), "no statistics yet");
-            }
+            syncList(byId("hh-swap-legend"), shown, function () {
+                return el("span", {}, [el("i"), el("span")]);
+            }, function (node, part) {
+                css(node.firstChild, "background", part[2]);
+                text(node.lastChild, part[1] + " " + Math.round((swaps[part[0]] || 0) / 60) + " min");
+            });
+            text(byId("hh-swap-total"), total > 0
+                ? (swaps.total_swaps || 0) + " swaps · " + ((swaps.total || 0) / 3600).toFixed(1)
+                    + " h · " + (swaps.total_pauses || 0) + " pauses"
+                : "no statistics yet");
         };
 
         // -- console -------------------------------------------------------
+        self.consoleNode = function (line) {
+            var node = el("div", {class: "hh-line" + (line.kind === "error" ? " err" : "")},
+                [line.text]);
+            if (line.kind === "error") {
+                node.appendChild(el("span", {class: "hh-flag",
+                    text: "intercepted — print protected"}));
+            }
+            return node;
+        };
+
+        // full redraw: startup, a refresh, opening the view
         self.renderConsole = function () {
             var box = byId("hh-console");
             if (!box) return;
             clear(box);
-            self.consoleLines.forEach(function (line) {
-                var node = el("div", {class: "hh-line" + (line.kind === "error" ? " err" : "")},
-                    [line.text]);
-                if (line.kind === "error") {
-                    node.appendChild(el("span", {class: "hh-flag",
-                        text: "intercepted — print protected"}));
-                }
-                box.appendChild(node);
-            });
+            self.consoleLines.forEach(function (line) { box.appendChild(self.consoleNode(line)); });
             box.scrollTop = box.scrollHeight;
+        };
+
+        // a pushed line adds one node and drops the oldest, instead of redrawing 300
+        self.appendConsole = function (line) {
+            var box = byId("hh-console");
+            self.consoleLines.push(line);
+            if (box) box.appendChild(self.consoleNode(line));
+            while (self.consoleLines.length > 300) {
+                self.consoleLines.shift();
+                if (box && box.firstChild) box.removeChild(box.firstChild);
+            }
+            if (box) box.scrollTop = box.scrollHeight;
         };
 
         self.renderProtected = function () {
