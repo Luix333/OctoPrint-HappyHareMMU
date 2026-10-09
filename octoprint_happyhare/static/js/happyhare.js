@@ -645,9 +645,11 @@ $(function () {
             sensorDot(X.ts, ["toolhead"]);
             mark(X.ts, "toolhead", false);
 
-            add(svg("path", {d: "M" + (X.nozzle - 16) + " " + (y - 20)
-                + " h32 l-10 26 h-12 Z", fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)",
-                "stroke-width": 2}));
+            // nozzle lying on its side, tapering along the filament rather than
+            // down across it: the wide end faces the toolhead, the tip points out
+            add(svg("path", {d: "M" + (X.nozzle - 13) + " " + (y - 16)
+                + " v32 l26 -10 v-12 Z", fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)",
+                "stroke-width": 2, "stroke-linejoin": "round"}));
             mark(X.nozzle, "nozzle", false);
 
             clear(box);
