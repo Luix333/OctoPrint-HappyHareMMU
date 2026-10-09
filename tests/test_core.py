@@ -201,6 +201,35 @@ class TestEndstopsAndProbe(unittest.TestCase):
         # and the UI has to say so rather than claim everything is open
         self.assertEqual(model.normalize({"query_endstops": {}})["endstops"], [])
 
+    def test_happy_hare_switches_are_not_listed_twice(self):
+        # Happy Hare registers its filament switches as endstops too, so the real
+        # printer reports extruder/toolhead in both places; mmu.sensors wins
+        # because it is live, an endstop only refreshes on QUERY_ENDSTOPS
+        status = {
+            "mmu": {"sensors": {"extruder": True, "toolhead": True}},
+            "query_endstops": {"last_query": {
+                "ercf_selector_home": "open", "extruder": "TRIGGERED",
+                "stepper_x": "open", "stepper_y": "open", "stepper_z": "open",
+                "toolhead": "TRIGGERED"}},
+        }
+        state = model.normalize(status)
+        sensor_labels = [s["label"] for s in state["sensors"]]
+        endstop_labels = [e["label"] for e in state["endstops"]]
+        self.assertEqual(sensor_labels, ["Extruder entry", "Toolhead"])
+        self.assertEqual(endstop_labels,
+                         ["Selector home", "X endstop", "Y endstop", "Z endstop"])
+        self.assertEqual(len(set(sensor_labels + endstop_labels)), 6)   # nothing twice
+
+    def test_axis_and_selector_labels(self):
+        status = {"query_endstops": {"last_query": {
+            "stepper_x": "open", "z": "TRIGGERED", "mmu_selector": "open",
+            "mmu_gear": "open"}}}
+        labels = {e["id"]: e["label"] for e in model.normalize(status)["endstops"]}
+        self.assertEqual(labels["stepper_x"], "X endstop")
+        self.assertEqual(labels["z"], "Z endstop")
+        self.assertEqual(labels["mmu_selector"], "Selector home")
+        self.assertEqual(labels["mmu_gear"], "MMU gear")
+
     def test_probe(self):
         status = {"probe": {"last_query": True, "last_z_result": 2.345}}
         probe = model.normalize(status)["probe"]

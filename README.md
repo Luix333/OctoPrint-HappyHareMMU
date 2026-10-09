@@ -66,8 +66,8 @@ reads the console, and can take state over a serial fallback channel — see `CO
 **Plugin Manager → Get More → ... from URL**, with either of these:
 
 ```
-https://github.com/Luix333/OctoPrint-HappyHareMMU/releases/download/v0.1.4/octoprint_happyharemmu-0.1.4-py3-none-any.whl
-https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.4.zip
+https://github.com/Luix333/OctoPrint-HappyHareMMU/releases/download/v0.1.5/octoprint_happyharemmu-0.1.5-py3-none-any.whl
+https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.5.zip
 ```
 
 The first is the built wheel and installs directly; the second is the source archive and is built on
@@ -77,7 +77,7 @@ The Plugin Manager also takes the wheel through **... from an uploaded file** (i
 `.zip` and `.tar.gz`), and from a shell on the printer:
 
 ```bash
-~/oprint/bin/pip install https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.4.zip
+~/oprint/bin/pip install https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.5.zip
 sudo service octoprint restart
 ```
 
@@ -109,7 +109,7 @@ container width, not viewport width, because UI Customizer's fluid layout change
 ## Development
 
 ```bash
-python -m unittest discover -s tests     # 54 tests, no OctoPrint needed
+python -m unittest discover -s tests     # 64 tests, no OctoPrint needed
 ```
 
 - `octoprint_happyhare/klippy.py` — Klipper API socket client (framing, handshake, reconnect)

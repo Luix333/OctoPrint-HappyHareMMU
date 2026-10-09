@@ -332,6 +332,7 @@ def normalize(status, config_mmu=None, save_variables=None):
             "stats": _gate_stats(save_variables, index),
         })
 
+    sensors = normalize_sensors(mmu.get("sensors"))
     filament_pos = mmu.get("filament_pos", -1)
     action = mmu.get("action", IDLE_ACTION)
     print_state = mmu.get("print_state", "")
@@ -386,8 +387,8 @@ def normalize(status, config_mmu=None, save_variables=None):
             mmu.get("endless_spool_enabled", mmu.get("endless_spool", False))
         ),
 
-        "sensors": normalize_sensors(mmu.get("sensors")),
-        "endstops": normalize_endstops(status.get("query_endstops")),
+        "sensors": sensors,
+        "endstops": normalize_endstops(status.get("query_endstops"), sensors),
         "probe": normalize_probe(status.get("probe")),
         "encoder": mmu.get("encoder") or {},
         "slicer_tool_map": mmu.get("slicer_tool_map") or {},
@@ -428,22 +429,37 @@ def normalize_sensors(sensors):
     return out
 
 
-def normalize_endstops(query_endstops):
+def normalize_endstops(query_endstops, sensors=None):
     """Klipper's last QUERY_ENDSTOPS result.
 
     ``last_query`` is only filled in once QUERY_ENDSTOPS has run, so an empty dict
     means "not asked yet", not "nothing connected".
+
+    Happy Hare's filament switches are registered as endstops as well, so the
+    same switch comes back here under its endstop name (``extruder``,
+    ``toolhead``). Those are dropped: the rows from ``mmu.sensors`` are the same
+    hardware and they update live, while an endstop only refreshes when queried.
     """
     last = (query_endstops or {}).get("last_query") or {}
+    already = set()
+    for sensor in sensors or []:
+        already.add(str(sensor.get("id", "")).lower())
+        already.add(str(sensor.get("raw", "")).lower())
+    already.discard("")
+
     out = []
     for name in sorted(last.keys()):
+        lowered = name.lower()
+        canonical = str(SENSOR_ALIASES.get(lowered, lowered)).lower()
+        if lowered in already or canonical in already:
+            continue
         raw = last[name]
         triggered = raw if isinstance(raw, bool) else str(raw).upper() in ("TRIGGERED", "1")
         out.append({
             "id": name,
             "label": _endstop_label(name),
             "state": bool(triggered),
-            "mmu": "mmu" in name.lower() or "selector" in name.lower(),
+            "mmu": "mmu" in lowered or "selector" in lowered or "ercf" in lowered,
         })
     # MMU endstops first, then the motion axes
     out.sort(key=lambda entry: (not entry["mmu"], entry["id"]))
@@ -451,14 +467,20 @@ def normalize_endstops(query_endstops):
 
 
 def _endstop_label(name):
-    pretty = {
-        "mmu_selector": "Selector home",
-        "mmu_gear": "Gear",
-        "x": "X", "y": "Y", "z": "Z",
-    }
-    if name in pretty:
-        return pretty[name]
-    return name.replace("_", " ").replace("mmu ", "MMU ").strip().capitalize()
+    """Readable names for what QUERY_ENDSTOPS reports.
+
+    Klipper names an axis endstop after its stepper (``stepper_x``), and the MMU
+    selector after whatever the config called it (``ercf_selector_home``).
+    """
+    lowered = name.lower()
+    if "selector" in lowered:
+        return "Selector home"
+    axis = re.match(r"^(?:stepper_)?([xyz])\d*$", lowered)
+    if axis:
+        return axis.group(1).upper() + " endstop"
+    if lowered.startswith("mmu_"):
+        return "MMU " + lowered[4:].replace("_", " ")
+    return name.replace("_", " ").strip().capitalize()
 
 
 def normalize_probe(probe):
