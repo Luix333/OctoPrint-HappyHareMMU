@@ -338,3 +338,11 @@
 
 /* navbar chip ----------------------------------------------------------- */
 a.hh-navbar { display: inline-flex; align-items: center; gap: 5px; }
+
+/* sidebar miniature of the filament path -------------------------------- */
+.hh-svgbox.hh-mini { margin: 2px 0 8px; }
+.hh-svgbox.hh-mini svg { min-width: 0; }
+
+/* add-ons --------------------------------------------------------------- */
+.hh-addons-empty { padding: 2px 0 4px; }
+#hh-side-blobifier .hh-meter { height: 8px; }

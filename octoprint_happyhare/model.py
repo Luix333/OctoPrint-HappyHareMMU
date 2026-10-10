@@ -106,6 +106,10 @@ SUBSCRIBE_OBJECTS = (
     "webhooks",
     "query_endstops",   # last QUERY_ENDSTOPS result, incl. the selector home switch
     "probe",            # last QUERY_PROBE result
+    # add-ons: present only when that macro file is included, which is why the
+    # client subscribes to the intersection with objects/list
+    "gcode_macro BLOBIFIER",
+    "gcode_macro _BLOBIFIER_COUNT",
 )
 
 # Fields that must be present before the UI can draw a gate map. Happy Hare can
@@ -393,6 +397,7 @@ def normalize(status, config_mmu=None, save_variables=None):
         "encoder": mmu.get("encoder") or {},
         "slicer_tool_map": mmu.get("slicer_tool_map") or {},
         "spoolman_support": mmu.get("spoolman_support", "off"),
+        "addons": {"blobifier": _blobifier(status)},
         "selector_offsets": _selector_offsets(save_variables),
         "counters": _counters(save_variables),
         "swap_stats": _swap_stats(save_variables),
@@ -511,6 +516,44 @@ def _bowden_length(config_mmu, save_variables):
         return float(config_mmu.get("bowden_length", 0) or 0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _blobifier(status):
+    """Blobifier purge bucket, if that add-on is installed.
+
+    Live counts come from the `_BLOBIFIER_COUNT` macro's variables; the limits
+    are the `BLOBIFIER` macro's configuration. Happy Hare pauses the print when
+    the bucket is full, so the fill level is worth showing before it does.
+    """
+    config = status.get("gcode_macro BLOBIFIER")
+    counts = status.get("gcode_macro _BLOBIFIER_COUNT")
+    if not isinstance(config, dict) and not isinstance(counts, dict):
+        return None
+    config = config or {}
+    counts = counts or {}
+
+    current = _int(counts.get("current_blobs"), 0)
+    maximum = _int(config.get("max_blobs"), 0)
+    percent = int(round(current * 100.0 / maximum)) if maximum > 0 else None
+    return {
+        "present": True,
+        "current_blobs": current,
+        "max_blobs": maximum,
+        "percent": percent,
+        "full": maximum > 0 and current >= maximum,
+        "last_shake": _int(counts.get("last_shake"), 0),
+        "next_shake": _int(counts.get("next_shake"), 0),
+        "shaker_enabled": bool(_int(config.get("enable_shaker"), 0)),
+        "bucket_shakes": _int(config.get("bucket_shakes"), 0),
+        "purge_length_max": config.get("purge_length_maximum"),
+    }
+
+
+def _int(value, default=0):
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
 
 
 def _selector_offsets(save_variables):

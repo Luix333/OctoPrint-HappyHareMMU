@@ -44,6 +44,8 @@ HTML_TAG = re.compile(r"<[^>]+>")
 MOTION_COMMANDS = {
     "home", "select_gate", "select_tool", "select_bypass", "change_tool", "load",
     "unload", "eject", "preload", "check_gate", "check_all", "servo", "motors_off",
+    # Blobifier moves the gantry; resetting its counter does not
+    "blobifier_shake", "blobifier_clean", "blobifier_park",
 }
 RECOVERY_COMMANDS = {"unlock", "recover", "resume", "cancel"}
 
@@ -111,6 +113,12 @@ class HappyHarePlugin(
             {"type": "tab", "name": "MMU", "custom_bindings": True},
             {"type": "sidebar", "name": "Happy Hare MMU", "icon": "circle-notch",
              "custom_bindings": True},
+            # a second sidebar panel, so add-ons can be placed (or hidden)
+            # separately in UI Customizer's row layout. Needs its own div, or it
+            # would collide with the panel above.
+            {"type": "sidebar", "name": "MMU Add-ons", "icon": "cube",
+             "template": "happyhare_addons_sidebar.jinja2",
+             "div": "sidebar_plugin_happyhare_addons", "custom_bindings": True},
             {"type": "navbar", "custom_bindings": True},
             {"type": "settings", "name": "Happy Hare MMU", "custom_bindings": True},
         ]
@@ -586,6 +594,11 @@ class HappyHarePlugin(
             "unlock": lambda d: "MMU_UNLOCK",
             "recover": lambda d: _recover_command(d),
             "enable": lambda d: "MMU ENABLE=%d" % (1 if d.get("enable", True) else 0),
+            # Blobifier add-on
+            "blobifier_reset": lambda d: "_BLOBIFIER_COUNT_RESET",
+            "blobifier_shake": lambda d: "BLOBIFIER_SHAKE_BUCKET",
+            "blobifier_clean": lambda d: "BLOBIFIER_CLEAN",
+            "blobifier_park": lambda d: "BLOBIFIER_PARK",
         }
 
         if command_id in ("resume", "cancel"):

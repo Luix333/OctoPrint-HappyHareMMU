@@ -115,6 +115,9 @@ $(function () {
     // Where the filament sits along the drawn path, per Happy Hare's filament_pos
     var PATH_X = {gate: 56, encoder: 150, bstart: 205, bend: 600, entry: 672,
                   gears: 740, ts: 826, nozzle: 944};
+    // the sidebar copy: same stops, short enough to stay legible at ~250px
+    var MINI_X = {gate: 28, encoder: 64, bstart: 88, bend: 248, entry: 282,
+                  gears: 312, ts: 346, nozzle: 392};
 
     function HappyHareViewModel(parameters) {
         var self = this;
@@ -273,6 +276,7 @@ $(function () {
             self.renderTools();
             self.renderSide();
             self.renderSensors();
+            self.renderAddons();
             self.renderNavbar();
             self.renderRecovery();
             self.renderGateTable();
@@ -529,9 +533,9 @@ $(function () {
         };
 
         // -- filament path -------------------------------------------------
-        self.pathFillX = function () {
+        self.pathFillX = function (X) {
             var pos = self.state.filament_pos;
-            var X = PATH_X;
+            X = X || PATH_X;
             if (pos <= 0) return X.gate;
             if (pos === 1) return X.encoder;
             if (pos === 2) return X.bstart;
@@ -556,27 +560,33 @@ $(function () {
         };
 
         self.renderPath = function () {
-            var box = byId("hh-path");
-            if (!box || !self.state.available) return;
-            var cache = box.hhPath;
-            var signature = self.pathSignature();
-            if (!cache || cache.signature !== signature) self.buildPath(signature);
-            self.updatePath();
+            if (!self.state.available) return;
+            [["hh-path", false], ["hh-side-path", true]].forEach(function (target) {
+                var box = byId(target[0]);
+                if (!box) return;
+                var signature = self.pathSignature() + (target[1] ? "|mini" : "");
+                if (!box.hhPath || box.hhPath.signature !== signature) {
+                    if (target[1]) self.buildMiniPath(box, signature);
+                    else self.buildPath(box, signature, false);
+                }
+                self.updatePath(box);
+            });
         };
 
-        self.buildPath = function (signature) {
-            var box = byId("hh-path");
-            var compact = self.compact;
+        // `mini` is the sidebar copy: same geometry, no captions, so it stays
+        // readable at about 250px wide
+        self.buildPath = function (box, signature, mini) {
+            var compact = self.compact || mini;
             var X = PATH_X;
             // headroom above the path for the sensor labels, below it for the stops
-            var y = compact ? 58 : 82;
-            var height = compact ? 120 : 168;
+            var y = mini ? 54 : (compact ? 58 : 82);
+            var height = mini ? 88 : (compact ? 120 : 168);
             var labelSize = compact ? 14 : 15;
             var subSize = compact ? 12 : 13;
             var root = svg("svg", {viewBox: "0 0 1000 " + height, role: "img",
                 "aria-label": "Filament path"});
             var add = function (node) { root.appendChild(node); return node; };
-            var cache = {signature: signature, y: y, dots: []};
+            var cache = {signature: signature, y: y, mini: !!mini, dots: []};
             var sensorIds = (self.state.sensors || []).map(function (sensor) { return sensor.id; });
 
             add(svg("rect", {x: X.gate - 14, y: y - 13,
@@ -588,7 +598,6 @@ $(function () {
             // drawn once and shown or hidden per push, so a push only edits attributes
             cache.fill = add(svg("line", {x1: X.gate, y1: y, y2: y, "stroke-width": 13,
                 "stroke-linecap": "round"}));
-            cache.arrow = add(svg("path", {fill: "var(--hh-accent)"}));
             cache.unknown = add(svg("text", {x: (X.gate + X.bend) / 2, y: y + 5,
                 "text-anchor": "middle", "font-size": 13, "font-weight": "600",
                 fill: "var(--hh-warn)"}));
@@ -596,6 +605,7 @@ $(function () {
 
             // a stop along the path; returns the node for its second line, if it has one
             var mark = function (x, label, withSub) {
+                if (mini) return null;
                 add(svg("line", {x1: x, y1: y + 16, x2: x, y2: y + 27, stroke: "var(--hh-line)"}));
                 add(svg("text", {x: x, y: y + 44, "text-anchor": "middle",
                     "font-size": labelSize, "font-weight": "500", fill: "var(--hh-ink)"}))
@@ -608,10 +618,20 @@ $(function () {
             // the first of `ids` that this machine has
             var sensorDot = function (x, ids) {
                 if (!ids.some(function (id) { return sensorIds.indexOf(id) >= 0; })) return;
+                // the stop beneath it already names it; the caption above only
+                // repeated that, so the dot carries a tooltip instead
                 cache.dots.push({ids: ids,
-                    circle: add(svg("circle", {cx: x, cy: y - 30, r: 8, "stroke-width": 2})),
-                    label: add(svg("text", {x: x, y: y - 46, "text-anchor": "middle",
-                        "font-size": subSize, "font-weight": "500"}))});
+                    circle: add(svg("circle", {cx: x, cy: y - 30, r: 8, "stroke-width": 2}))});
+            };
+
+            // selector servo (ERCF) or grip (type B): it clamps the filament at
+            // the gate, so it belongs at the gate end of the path
+            cache.servo = {
+                box: add(svg("rect", {x: X.gate - 46, y: y - 52, width: 66, height: 21, rx: 7,
+                    fill: "var(--hh-surface-2)", stroke: "var(--hh-line)"})),
+                arrow: add(svg("path", {})),
+                label: add(svg("text", {x: X.gate - 5, y: y - 37, "text-anchor": "middle",
+                    "font-size": 12.5, "font-weight": "600"}))
             };
 
             add(svg("rect", {x: X.gate - 32, y: y - 30, width: 34, height: 60, rx: 7,
@@ -657,32 +677,105 @@ $(function () {
             box.hhPath = cache;
         };
 
-        self.updatePath = function () {
-            var cache = byId("hh-path").hhPath;
+        self.buildMiniPath = function (box, signature) {
+            var X = MINI_X;
+            var y = 56;
+            var root = svg("svg", {viewBox: "0 0 420 104", role: "img",
+                "aria-label": "Filament path"});
+            var add = function (node) { root.appendChild(node); return node; };
+            var cache = {signature: signature, y: y, X: X, mini: true, dots: [],
+                         servo: null};
+            var sensorIds = (self.state.sensors || []).map(function (sensor) { return sensor.id; });
+
+            add(svg("rect", {x: X.gate - 10, y: y - 10, width: (X.nozzle - X.gate) + 26,
+                height: 20, rx: 10, fill: "var(--hh-surface-2)", stroke: "var(--hh-line)"}));
+            add(svg("rect", {x: X.bstart, y: y - 10, width: X.bend - X.bstart, height: 20,
+                fill: "var(--hh-surface-3)", opacity: "0.75"}));
+
+            cache.fill = add(svg("line", {x1: X.gate, y1: y, y2: y, "stroke-width": 10,
+                "stroke-linecap": "round"}));
+            cache.unknown = add(svg("text", {x: (X.gate + X.bend) / 2, y: y + 4,
+                "text-anchor": "middle", "font-size": 13, "font-weight": "600",
+                fill: "var(--hh-warn)"}));
+            cache.unknown.textContent = "position unknown";
+
+            add(svg("rect", {x: X.gate - 24, y: y - 20, width: 26, height: 40, rx: 5,
+                fill: "var(--hh-surface-2)", stroke: "var(--hh-line)"}));
+            cache.gateLabel = add(svg("text", {x: X.gate - 11, y: y + 4, "text-anchor": "middle",
+                "font-size": 13, "font-weight": "600", fill: "var(--hh-ink)"}));
+
+            add(svg("circle", {cx: X.encoder, cy: y, r: 11, fill: "none",
+                stroke: "var(--hh-accent)", "stroke-width": 2, "stroke-dasharray": "4 3"}));
+
+            cache.progressTrack = add(svg("rect", {x: X.bstart, y: y + 14,
+                width: X.bend - X.bstart, height: 4, rx: 2, fill: "var(--hh-surface-3)"}));
+            cache.progressBar = add(svg("rect", {x: X.bstart, y: y + 14, height: 4, rx: 2,
+                fill: "var(--hh-accent)"}));
+
+            var dot = function (x, ids) {
+                if (!ids.some(function (id) { return sensorIds.indexOf(id) >= 0; })) return;
+                cache.dots.push({ids: ids,
+                    circle: add(svg("circle", {cx: x, cy: y - 22, r: 6, "stroke-width": 2}))});
+            };
+            dot(X.gate + 22, ["gate_entry", "gate_shared"]);
+            dot(X.entry, ["extruder"]);
+            dot(X.ts, ["toolhead"]);
+
+            [-1, 1].forEach(function (side) {
+                add(svg("circle", {cx: X.gears, cy: y + side * 15, r: 8,
+                    fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)", "stroke-width": 1.5}));
+            });
+
+            add(svg("path", {d: "M" + (X.nozzle - 8) + " " + (y - 11) + " v22 l18 -7 v-8 Z",
+                fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)", "stroke-width": 1.5,
+                "stroke-linejoin": "round"}));
+
+            clear(box);
+            box.appendChild(root);
+            box.hhPath = cache;
+        };
+
+        self.updatePath = function (box) {
+            var cache = box.hhPath;
             var state = self.state;
-            var X = PATH_X;
+            var X = cache.X || PATH_X;
             var y = cache.y;
 
-            text(byId("hh-path-hint"), (state.bowden_length ? "bowden "
+            if (!cache.mini) text(byId("hh-path-hint"), (state.bowden_length ? "bowden "
                 + Math.round(state.bowden_length) + " mm" : "")
                 + (state.bowden_progress >= 0 ? " · " + state.bowden_progress + "%" : ""));
 
             var known = state.filament_pos >= 0;
             var gate = (state.gates || [])[state.gate];
-            var fill = known ? self.pathFillX() : X.gate;
+            var fill = known ? self.pathFillX(X) : X.gate;
             show(cache.fill, known && fill > X.gate);
             if (known && fill > X.gate) {
                 attr(cache.fill, "x2", fill);
                 attr(cache.fill, "stroke", (gate && gate.rgb) || "var(--hh-muted)");
             }
-            var dir = known ? state.filament_direction : 0;
-            show(cache.arrow, !!dir);
-            if (dir) {
-                var ax = Math.min(Math.max(fill, X.gate + 30), X.nozzle - 10);
-                attr(cache.arrow, "d", "M" + ax + " " + (y - 26) + " l" + (14 * dir)
-                    + " 9 l" + (-14 * dir) + " 9 Z");
-            }
             show(cache.unknown, !known);
+
+            // servo: Up / Down / Move on ERCF, Gripped / Released on type B.
+            // The sidebar has it as a row of its own, so the miniature omits it.
+            var servo = cache.servo ? String(state.servo || state.grip || "") : "";
+            var gripping = /down|grip/i.test(servo);
+            var moving = /move/i.test(servo);
+            if (cache.servo) {
+                ["box", "arrow", "label"].forEach(function (key) {
+                    show(cache.servo[key], !!servo);
+                });
+            }
+            if (servo) {
+                var sx = X.gate - 33;
+                var sy = y - 41;
+                attr(cache.servo.arrow, "d", gripping
+                    ? "M" + (sx - 6) + " " + (sy - 4) + " h12 l-6 10 Z"
+                    : "M" + (sx - 6) + " " + (sy + 6) + " h12 l-6 -10 Z");
+                attr(cache.servo.arrow, "fill", moving ? "var(--hh-warn)"
+                    : gripping ? "var(--hh-ok)" : "var(--hh-muted)");
+                attr(cache.servo.label, "fill", moving ? "var(--hh-warn)" : "var(--hh-ink)");
+                text(cache.servo.label, servo.toUpperCase());
+            }
 
             text(cache.gateLabel, state.gate >= 0 ? "G" + state.gate
                 : state.gate === -2 ? "BP" : "—");
@@ -691,7 +784,7 @@ $(function () {
                 show(node, !!value);
                 text(node, value);
             };
-            sub(cache.flow, state.encoder && state.encoder.flow_rate !== undefined
+            if (!cache.mini) sub(cache.flow, state.encoder && state.encoder.flow_rate !== undefined
                 ? state.encoder.flow_rate + "% flow" : null);
             sub(cache.bowden, state.bowden_length ? Math.round(state.bowden_length) + " mm" : null);
             sub(cache.synced, state.sync_drive ? "synced" : null);
@@ -714,8 +807,13 @@ $(function () {
                 attr(dot.circle, "fill", on ? "var(--hh-ok)" : "var(--hh-surface)");
                 attr(dot.circle, "stroke", on ? "var(--hh-ok)" : off ? "var(--hh-line)" : "var(--hh-muted)");
                 attr(dot.circle, "stroke-dasharray", sensor.state === null ? "2 2" : null);
-                attr(dot.label, "fill", on ? "var(--hh-ok)" : "var(--hh-muted)");
-                text(dot.label, sensor.label);
+                var title = dot.circle.querySelector("title");
+                if (!title) {
+                    title = document.createElementNS(SVG_NS, "title");
+                    dot.circle.appendChild(title);
+                }
+                title.textContent = sensor.label + ": "
+                    + (on ? "triggered" : off ? "open" : "disabled");
             });
         };
 
@@ -815,6 +913,17 @@ $(function () {
             text(byId("hh-side-filament"), state.filament || "—");
             text(byId("hh-side-position"), state.filament_pos_name || "—");
             text(byId("hh-side-action"), state.action || "—");
+
+            // ERCF reports a servo, type B a grip; show whichever exists
+            var servo = String(state.servo || state.grip || "");
+            var servoRow = byId("hh-side-servo");
+            if (servoRow) {
+                prop(byId("hh-side-servo-label"), "hidden", !servo);
+                prop(servoRow, "hidden", !servo);
+                text(servoRow, servo || "—");
+                css(servoRow, "color", /move/i.test(servo) ? "var(--hh-warn)"
+                    : /down|grip/i.test(servo) ? "var(--hh-ok)" : "");
+            }
 
             var badge = byId("hh-side-state");
             if (badge) {
@@ -965,6 +1074,67 @@ $(function () {
                     var message = (response && response.responseJSON && response.responseJSON.error)
                         || "could not query the sensors";
                     new PNotify({title: "Happy Hare", text: message, type: "error"});
+                });
+        };
+
+        // -- add-ons -------------------------------------------------------
+        /*
+         * Blobifier keeps its live counts in the _BLOBIFIER_COUNT macro and its
+         * limits in the BLOBIFIER macro, so the panel can show how full the
+         * bucket is before Happy Hare pauses the print over it.
+         */
+        self.renderAddons = function () {
+            var blob = (self.state.addons || {}).blobifier;
+            var present = !!(blob && blob.present);
+
+            prop(byId("hh-blobifier-panel"), "hidden", !present);
+            prop(byId("hh-addons-none"), "hidden", present);
+            prop(byId("hh-side-blobifier"), "hidden", !present);
+            prop(byId("hh-addons-empty"), "hidden", present);
+            if (!present) return;
+
+            var pct = blob.percent === null || blob.percent === undefined
+                ? 0 : Math.max(0, Math.min(100, blob.percent));
+            var colour = blob.full ? "var(--hh-crit)" : pct >= 80 ? "var(--hh-warn)" : "var(--hh-ok)";
+            var count = blob.current_blobs + (blob.max_blobs ? " / " + blob.max_blobs : "")
+                + " blobs";
+            var shake = blob.shaker_enabled
+                ? "Shakes the bucket every " + Math.max(1, blob.next_shake - blob.last_shake)
+                    + " blobs — next at " + blob.next_shake + ", last at " + blob.last_shake + "."
+                : "Bucket shaker is disabled.";
+
+            [["hh-blob-bar", "hh-blob-count", "hh-blob-shake", "hh-blob-sub"],
+             ["hh-side-blob-bar", "hh-side-blob-count", "hh-side-blob-shake", null]]
+                .forEach(function (ids) {
+                    var bar = byId(ids[0]);
+                    if (bar) {
+                        css(bar, "width", pct + "%");
+                        css(bar, "background", colour);
+                    }
+                    text(byId(ids[1]), count);
+                    text(byId(ids[2]), shake);
+                    if (ids[3]) {
+                        text(byId(ids[3]), blob.full ? "bucket full"
+                            : pct + "% full" + (blob.purge_length_max
+                                ? " · up to " + blob.purge_length_max + " mm per purge" : ""));
+                    }
+                });
+
+            var badge = byId("hh-side-blob-badge");
+            if (badge) {
+                text(badge, blob.full ? "full" : pct + "%");
+                prop(badge, "className", "hh-badge " + (blob.full ? "crit"
+                    : pct >= 80 ? "warn" : "mute"));
+            }
+
+            var state = self.state;
+            var moving = (state.printing && !state.paused) || !self.canControl();
+            [["hh-blob-shake-btn", moving], ["hh-blob-clean", moving], ["hh-blob-park", moving],
+             ["hh-side-blob-shake-btn", moving],
+             ["hh-blob-reset", !self.canControl()], ["hh-side-blob-reset", !self.canControl()]]
+                .forEach(function (entry) {
+                    var button = byId(entry[0]);
+                    if (button) prop(button, "disabled", !!entry[1]);
                 });
         };
 
@@ -1417,7 +1587,8 @@ $(function () {
         self.selectView = function (view) {
             if (!view) return;
             self.view = view;
-            ["operate", "gates", "preflight", "health", "console"].forEach(function (name) {
+            ["operate", "gates", "preflight", "health", "addons", "console"]
+                .forEach(function (name) {
                 var node = byId("hh-view-" + name);
                 if (!node) return;
                 var active = name === view;
@@ -1458,6 +1629,19 @@ $(function () {
                 $("#tab_plugin_happyhare_link a").click();
             });
             doc.on("click.hh", "#hh-sensors-refresh", function () { self.refreshSensors(); });
+            doc.on("click.hh", "#hh-blob-reset, #hh-side-blob-reset", function () {
+                self.command("blobifier_reset", {},
+                    "Reset the Blobifier blob count? Do this after emptying the bucket.");
+            });
+            doc.on("click.hh", "#hh-blob-shake-btn, #hh-side-blob-shake-btn", function () {
+                self.command("blobifier_shake", {}, "Shake the purge bucket?");
+            });
+            doc.on("click.hh", "#hh-blob-clean", function () {
+                self.command("blobifier_clean", {}, "Run the nozzle brush?");
+            });
+            doc.on("click.hh", "#hh-blob-park", function () {
+                self.command("blobifier_park", {}, "Park the toolhead over the bucket?");
+            });
         };
 
         self.watchSettings = function () {
@@ -1512,6 +1696,7 @@ $(function () {
         construct: HappyHareViewModel,
         dependencies: ["settingsViewModel", "loginStateViewModel", "accessViewModel"],
         elements: ["#tab_plugin_happyhare", "#sidebar_plugin_happyhare_wrapper",
+                   "#sidebar_plugin_happyhare_addons_wrapper",
                    "#navbar_plugin_happyhare", "#settings_plugin_happyhare"]
     });
 });

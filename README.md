@@ -30,7 +30,8 @@ Out of the box, an MMU on OctoPrint is not just invisible — it is actively wor
   tools and EndlessSpool group; the carriage animates to the selected gate. Gates are drawn at their
   calibrated selector offsets when Happy Hare has them.
 - **Filament path** — gate → encoder → bowden (with live progress) → extruder → toolhead sensor →
-  nozzle, filled to Happy Hare's `filament_pos`, with live sensor states.
+  nozzle, filled to Happy Hare's `filament_pos`, with live sensor states and the selector servo's
+  up/down position. A short version of it sits in the sidebar too.
 - **Controls** — tool change, select, load, unload, eject, preload, check gates, home, motors off,
   bypass. Anything that moves filament is blocked while printing and offered while paused.
 - **Gate map, tool-to-gate map and EndlessSpool groups**, editable from the table.
@@ -39,6 +40,9 @@ Out of the box, an MMU on OctoPrint is not just invisible — it is actively wor
   loaded, before you start the print.
 - **Health** — per-gate reliability from Happy Hare's own statistics, maintenance counters
   (servo, cutter blade) against their limits, and where swap time goes.
+- **Add-ons** — a Blobifier panel in the tab and in its own sidebar section: how full the purge
+  bucket is against `max_blobs`, when it next shakes, and buttons for emptied / shake / clean / park.
+  Happy Hare pauses the print when that bucket fills, so it is worth seeing beforehand.
 - **Sensor panel** in the sidebar: the filament switches and encoder (which publish continuously),
   plus the selector home endstop and the Z probe, which only update when queried — so there's a
   refresh button that runs `QUERY_ENDSTOPS` and `QUERY_PROBE`.
@@ -66,8 +70,8 @@ reads the console, and can take state over a serial fallback channel — see `CO
 **Plugin Manager → Get More → ... from URL**, with either of these:
 
 ```
-https://github.com/Luix333/OctoPrint-HappyHareMMU/releases/download/v0.1.5/octoprint_happyharemmu-0.1.5-py3-none-any.whl
-https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.5.zip
+https://github.com/Luix333/OctoPrint-HappyHareMMU/releases/download/v0.1.6/octoprint_happyharemmu-0.1.6-py3-none-any.whl
+https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.6.zip
 ```
 
 The first is the built wheel and installs directly; the second is the source archive and is built on
@@ -77,7 +81,7 @@ The Plugin Manager also takes the wheel through **... from an uploaded file** (i
 `.zip` and `.tar.gz`), and from a shell on the printer:
 
 ```bash
-~/oprint/bin/pip install https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.5.zip
+~/oprint/bin/pip install https://github.com/Luix333/OctoPrint-HappyHareMMU/archive/refs/tags/v0.1.6.zip
 sudo service octoprint restart
 ```
 
@@ -109,7 +113,7 @@ container width, not viewport width, because UI Customizer's fluid layout change
 ## Development
 
 ```bash
-python -m unittest discover -s tests     # 64 tests, no OctoPrint needed
+python -m unittest discover -s tests     # 68 tests, no OctoPrint needed
 ```
 
 - `octoprint_happyhare/klippy.py` — Klipper API socket client (framing, handshake, reconnect)

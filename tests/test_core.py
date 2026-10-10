@@ -240,6 +240,45 @@ class TestEndstopsAndProbe(unittest.TestCase):
         self.assertIsNone(model.normalize({})["probe"])
 
 
+class TestAddons(unittest.TestCase):
+    """Blobifier: live counts in _BLOBIFIER_COUNT, limits in BLOBIFIER."""
+
+    BLOB = {
+        "gcode_macro BLOBIFIER": {"max_blobs": 400, "enable_shaker": 1,
+                                  "bucket_shakes": 10, "purge_length_maximum": 100},
+        "gcode_macro _BLOBIFIER_COUNT": {"current_blobs": 47, "last_shake": 39,
+                                         "next_shake": 49},
+    }
+
+    def test_reads_the_bucket(self):
+        blob = model.normalize(dict(self.BLOB))["addons"]["blobifier"]
+        self.assertTrue(blob["present"])
+        self.assertEqual(blob["current_blobs"], 47)
+        self.assertEqual(blob["max_blobs"], 400)
+        self.assertEqual(blob["percent"], 12)
+        self.assertFalse(blob["full"])
+        self.assertTrue(blob["shaker_enabled"])
+        self.assertEqual(blob["next_shake"], 49)
+
+    def test_full_bucket(self):
+        status = {"gcode_macro BLOBIFIER": {"max_blobs": 400},
+                  "gcode_macro _BLOBIFIER_COUNT": {"current_blobs": 400}}
+        blob = model.normalize(status)["addons"]["blobifier"]
+        self.assertTrue(blob["full"])
+        self.assertEqual(blob["percent"], 100)
+
+    def test_absent_when_the_addon_is_not_installed(self):
+        self.assertIsNone(model.normalize({"mmu": {}})["addons"]["blobifier"])
+
+    def test_survives_a_missing_limit(self):
+        # the count macro exists but BLOBIFIER has not published yet
+        blob = model.normalize({"gcode_macro _BLOBIFIER_COUNT":
+                                {"current_blobs": 3}})["addons"]["blobifier"]
+        self.assertEqual(blob["current_blobs"], 3)
+        self.assertIsNone(blob["percent"])
+        self.assertFalse(blob["full"])
+
+
 # --------------------------------------------------------------------------
 # Prompt parsing
 # --------------------------------------------------------------------------

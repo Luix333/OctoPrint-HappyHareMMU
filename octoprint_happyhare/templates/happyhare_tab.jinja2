@@ -20,6 +20,7 @@
     <li><a href="#" data-view="gates">Gates &amp; TTG</a></li>
     <li><a href="#" data-view="preflight">Pre-flight</a></li>
     <li><a href="#" data-view="health">Health</a></li>
+    <li><a href="#" data-view="addons">Add-ons</a></li>
     <li><a href="#" data-view="console">Console</a></li>
   </ul>
 
@@ -106,6 +107,37 @@
       <div class="hh-body">
         <div class="hh-stack" id="hh-swap-stack"></div>
         <div class="hh-legend" id="hh-swap-legend"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="hh-view" id="hh-view-addons" hidden>
+    <div class="hh-panel" id="hh-blobifier-panel" hidden>
+      <header>
+        <h3>Blobifier</h3>
+        <span class="hh-hint" id="hh-blob-sub"></span>
+      </header>
+      <div class="hh-body">
+        <div class="hh-bars">
+          <div class="hh-bar">
+            <span>Purge bucket</span>
+            <span class="hh-track"><i id="hh-blob-bar"></i></span>
+            <span class="hh-hint" id="hh-blob-count"></span>
+          </div>
+        </div>
+        <p class="hh-hint" id="hh-blob-shake" style="margin:8px 0 0"></p>
+        <div class="hh-actions" style="margin-top:9px">
+          <button class="btn btn-small" id="hh-blob-reset">Bucket emptied</button>
+          <button class="btn btn-small" id="hh-blob-shake-btn">Shake bucket</button>
+          <button class="btn btn-small" id="hh-blob-clean">Clean nozzle</button>
+          <button class="btn btn-small" id="hh-blob-park">Park</button>
+        </div>
+      </div>
+    </div>
+    <div class="hh-panel" id="hh-addons-none">
+      <div class="hh-body hh-hint">
+        No MMU add-ons detected. Blobifier shows up here once
+        <code>blobifier.cfg</code> is included in your Klipper config.
       </div>
     </div>
   </section>
