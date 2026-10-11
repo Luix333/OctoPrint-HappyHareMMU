@@ -807,7 +807,7 @@ $(function () {
             if (servo) {
                 // every gear is drawn the same; the top one simply fades back
                 // when the servo lets go, and is fully drawn when it grips
-                var solid = gripping ? null : "0.50";
+                var solid = gripping ? null : "0.30";
                 attr(cache.servo.top, "opacity", solid);
                 attr(cache.servo.topInner, "opacity", solid);
             }
