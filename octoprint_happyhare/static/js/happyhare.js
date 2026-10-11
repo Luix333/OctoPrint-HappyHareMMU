@@ -633,9 +633,12 @@ $(function () {
             // the selector servo clamps the filament before the gate, so it sits at the
             // head of the path, drawn like the extruder gears it is a sibling of
             cache.servo = {
+                // identical to the extruder gears; only the top one's fill moves,
+                // hollow when the servo is up and solid when it grips
                 top: add(svg("circle", {cx: X.servo, cy: y - 21, r: 13,
-                    fill: "var(--hh-surface-2)", "stroke-width": 2})),
-                topInner: add(svg("circle", {cx: X.servo, cy: y - 21, r: 5})),
+                    stroke: "var(--hh-ink-2)", "stroke-width": 2})),
+                topInner: add(svg("circle", {cx: X.servo, cy: y - 21, r: 5,
+                    fill: "var(--hh-ink-2)"})),
                 bottom: add(svg("circle", {cx: X.servo, cy: y + 21, r: 13,
                     fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)", "stroke-width": 2})),
                 bottomInner: add(svg("circle", {cx: X.servo, cy: y + 21, r: 5,
@@ -715,8 +718,9 @@ $(function () {
             // for a caption, and updatePath leaves `sub` alone when it is null
             cache.servo = {
                 top: add(svg("circle", {cx: X.servo, cy: y - 15, r: 8,
-                    fill: "var(--hh-surface-2)", "stroke-width": 1.5})),
-                topInner: add(svg("circle", {cx: X.servo, cy: y - 15, r: 3.5})),
+                    stroke: "var(--hh-ink-2)", "stroke-width": 1.5})),
+                topInner: add(svg("circle", {cx: X.servo, cy: y - 15, r: 3.5,
+                    fill: "var(--hh-ink-2)"})),
                 bottom: add(svg("circle", {cx: X.servo, cy: y + 15, r: 8,
                     fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)", "stroke-width": 1.5})),
                 bottomInner: add(svg("circle", {cx: X.servo, cy: y + 15, r: 3.5,
@@ -749,6 +753,8 @@ $(function () {
             [-1, 1].forEach(function (side) {
                 add(svg("circle", {cx: X.gears, cy: y + side * 15, r: 8,
                     fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)", "stroke-width": 1.5}));
+                add(svg("circle", {cx: X.gears, cy: y + side * 15, r: 3.5,
+                    fill: "var(--hh-ink-2)"}));
             });
 
             add(svg("path", {d: "M" + (X.nozzle - 8) + " " + (y - 11) + " v22 l18 -7 v-8 Z",
@@ -797,10 +803,10 @@ $(function () {
                 });
             }
             if (servo) {
-                attr(cache.servo.top, "stroke", moving ? "var(--hh-warn)"
-                    : gripping ? "var(--hh-ok)" : "var(--hh-muted)");
-                attr(cache.servo.topInner, "fill", moving ? "var(--hh-warn)"
-                    : gripping ? "var(--hh-ok)" : "var(--hh-muted)");
+                // the gears look the same everywhere; what moves is whether the
+                // top one is filled, which is what the servo itself does
+                attr(cache.servo.top, "fill", gripping ? "var(--hh-ink-2)" : "none");
+                show(cache.servo.topInner, !gripping);
             }
 
             text(cache.gateLabel, state.gate >= 0 ? "G" + state.gate
