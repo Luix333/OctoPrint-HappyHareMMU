@@ -116,8 +116,8 @@ $(function () {
     var PATH_X = {servo: 26, gate: 92, encoder: 170, bstart: 205, bend: 600, entry: 672,
                   gears: 740, ts: 826, nozzle: 944};
     // the sidebar copy: same stops, short enough to stay legible at ~250px
-    var MINI_X = {gate: 28, encoder: 64, bstart: 88, bend: 248, entry: 282,
-                  gears: 312, ts: 346, nozzle: 392};
+    var MINI_X = {servo: 16, gate: 58, encoder: 92, bstart: 110, bend: 250,
+                  entry: 282, gears: 312, ts: 346, nozzle: 392};
 
     function HappyHareViewModel(parameters) {
         var self = this;
@@ -697,17 +697,32 @@ $(function () {
                          servo: null};
             var sensorIds = (self.state.sensors || []).map(function (sensor) { return sensor.id; });
 
-            add(svg("rect", {x: X.gate - 10, y: y - 10, width: (X.nozzle - X.gate) + 26,
+            add(svg("rect", {x: 4, y: y - 10, width: X.nozzle + 4,
                 height: 20, rx: 10, fill: "var(--hh-surface-2)", stroke: "var(--hh-line)"}));
             add(svg("rect", {x: X.bstart, y: y - 10, width: X.bend - X.bstart, height: 20,
                 fill: "var(--hh-surface-3)", opacity: "0.75"}));
 
+            cache.feed = add(svg("line", {x1: 6, y1: y, x2: X.gate, y2: y,
+                "stroke-width": 10, "stroke-linecap": "round"}));
             cache.fill = add(svg("line", {x1: X.gate, y1: y, y2: y, "stroke-width": 10,
                 "stroke-linecap": "round"}));
             cache.unknown = add(svg("text", {x: (X.gate + X.bend) / 2, y: y + 4,
                 "text-anchor": "middle", "font-size": 13, "font-weight": "600",
                 fill: "var(--hh-warn)"}));
             cache.unknown.textContent = "position unknown";
+
+            // same gear pair as the wide path, at this scale; the sidebar has no room
+            // for a caption, and updatePath leaves `sub` alone when it is null
+            cache.servo = {
+                top: add(svg("circle", {cx: X.servo, cy: y - 15, r: 8,
+                    fill: "var(--hh-surface-2)", "stroke-width": 1.5})),
+                topInner: add(svg("circle", {cx: X.servo, cy: y - 15, r: 3.5})),
+                bottom: add(svg("circle", {cx: X.servo, cy: y + 15, r: 8,
+                    fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)", "stroke-width": 1.5})),
+                bottomInner: add(svg("circle", {cx: X.servo, cy: y + 15, r: 3.5,
+                    fill: "var(--hh-ink-2)"})),
+                sub: null
+            };
 
             add(svg("rect", {x: X.gate - 24, y: y - 20, width: 26, height: 40, rx: 5,
                 fill: "var(--hh-surface-2)", stroke: "var(--hh-line)"}));
@@ -928,17 +943,6 @@ $(function () {
             text(byId("hh-side-filament"), state.filament || "—");
             text(byId("hh-side-position"), state.filament_pos_name || "—");
             text(byId("hh-side-action"), state.action || "—");
-
-            // ERCF reports a servo, type B a grip; show whichever exists
-            var servo = String(state.servo || state.grip || "");
-            var servoRow = byId("hh-side-servo");
-            if (servoRow) {
-                prop(byId("hh-side-servo-label"), "hidden", !servo);
-                prop(servoRow, "hidden", !servo);
-                text(servoRow, servo || "—");
-                css(servoRow, "color", /move/i.test(servo) ? "var(--hh-warn)"
-                    : /down|grip/i.test(servo) ? "var(--hh-ok)" : "");
-            }
 
             var badge = byId("hh-side-state");
             if (badge) {
