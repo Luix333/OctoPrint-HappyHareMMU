@@ -636,7 +636,8 @@ $(function () {
                 // identical to the extruder gears; only the top one's fill moves,
                 // hollow when the servo is up and solid when it grips
                 top: add(svg("circle", {cx: X.servo, cy: y - 21, r: 13,
-                    stroke: "var(--hh-ink-2)", "stroke-width": 2})),
+                    fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)",
+                    "stroke-width": 2})),
                 topInner: add(svg("circle", {cx: X.servo, cy: y - 21, r: 5,
                     fill: "var(--hh-ink-2)"})),
                 bottom: add(svg("circle", {cx: X.servo, cy: y + 21, r: 13,
@@ -718,7 +719,8 @@ $(function () {
             // for a caption, and updatePath leaves `sub` alone when it is null
             cache.servo = {
                 top: add(svg("circle", {cx: X.servo, cy: y - 15, r: 8,
-                    stroke: "var(--hh-ink-2)", "stroke-width": 1.5})),
+                    fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)",
+                    "stroke-width": 1.5})),
                 topInner: add(svg("circle", {cx: X.servo, cy: y - 15, r: 3.5,
                     fill: "var(--hh-ink-2)"})),
                 bottom: add(svg("circle", {cx: X.servo, cy: y + 15, r: 8,
@@ -803,10 +805,11 @@ $(function () {
                 });
             }
             if (servo) {
-                // the gears look the same everywhere; what moves is whether the
-                // top one is filled, which is what the servo itself does
-                attr(cache.servo.top, "fill", gripping ? "var(--hh-ink-2)" : "none");
-                show(cache.servo.topInner, !gripping);
+                // every gear is drawn the same; the top one simply fades back
+                // when the servo lets go, and is fully drawn when it grips
+                var solid = gripping ? null : "0.65";
+                attr(cache.servo.top, "opacity", solid);
+                attr(cache.servo.topInner, "opacity", solid);
             }
 
             text(cache.gateLabel, state.gate >= 0 ? "G" + state.gate
