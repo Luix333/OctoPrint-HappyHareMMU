@@ -113,7 +113,7 @@ $(function () {
     }
 
     // Where the filament sits along the drawn path, per Happy Hare's filament_pos
-    var PATH_X = {gate: 56, encoder: 150, bstart: 205, bend: 600, entry: 672,
+    var PATH_X = {servo: 26, gate: 92, encoder: 170, bstart: 205, bend: 600, entry: 672,
                   gears: 740, ts: 826, nozzle: 944};
     // the sidebar copy: same stops, short enough to stay legible at ~250px
     var MINI_X = {gate: 28, encoder: 64, bstart: 88, bend: 248, entry: 282,
@@ -589,8 +589,8 @@ $(function () {
             var cache = {signature: signature, y: y, mini: !!mini, dots: []};
             var sensorIds = (self.state.sensors || []).map(function (sensor) { return sensor.id; });
 
-            add(svg("rect", {x: X.gate - 14, y: y - 13,
-                width: (X.nozzle - X.gate) + 30, height: 26, rx: 13,
+            add(svg("rect", {x: 8, y: y - 13,
+                width: X.nozzle + 8, height: 26, rx: 13,
                 fill: "var(--hh-surface-2)", stroke: "var(--hh-line)"}));
             add(svg("rect", {x: X.bstart, y: y - 13, width: X.bend - X.bstart,
                 height: 26, fill: "var(--hh-surface-3)", opacity: "0.75"}));
@@ -616,23 +616,28 @@ $(function () {
             };
 
             // the first of `ids` that this machine has
-            var sensorDot = function (x, ids) {
+            var sensorDot = function (x, ids, sub) {
                 if (!ids.some(function (id) { return sensorIds.indexOf(id) >= 0; })) return;
                 // the stop beneath it already names it; the caption above only
                 // repeated that, so the dot carries a tooltip instead
                 cache.dots.push({ids: ids,
-                    circle: add(svg("circle", {cx: x, cy: y - 30, r: 8, "stroke-width": 2}))});
+                    circle: add(svg("circle", {cx: x, cy: y - 30, r: 8, "stroke-width": 2})),
+                    sub: sub || null});
             };
 
-            // selector servo (ERCF) or grip (type B): it clamps the filament at
-            // the gate, so it belongs at the gate end of the path
+            // the selector servo clamps the filament before the gate, so it sits at the
+            // head of the path, drawn like the extruder gears it is a sibling of
             cache.servo = {
-                box: add(svg("rect", {x: X.gate - 46, y: y - 52, width: 66, height: 21, rx: 7,
-                    fill: "var(--hh-surface-2)", stroke: "var(--hh-line)"})),
-                arrow: add(svg("path", {})),
-                label: add(svg("text", {x: X.gate - 5, y: y - 37, "text-anchor": "middle",
-                    "font-size": 12.5, "font-weight": "600"}))
+                top: add(svg("circle", {cx: X.servo, cy: y - 21, r: 13,
+                    fill: "var(--hh-surface-2)", "stroke-width": 2})),
+                topInner: add(svg("circle", {cx: X.servo, cy: y - 21, r: 5})),
+                bottom: add(svg("circle", {cx: X.servo, cy: y + 21, r: 13,
+                    fill: "var(--hh-surface-2)", stroke: "var(--hh-ink-2)", "stroke-width": 2})),
+                bottomInner: add(svg("circle", {cx: X.servo, cy: y + 21, r: 5,
+                    fill: "var(--hh-ink-2)"})),
+                sub: null
             };
+            cache.servo.sub = mark(X.servo, "Servo", true);
 
             add(svg("rect", {x: X.gate - 32, y: y - 30, width: 34, height: 60, rx: 7,
                 fill: "var(--hh-surface-2)", stroke: "var(--hh-line)"}));
@@ -640,7 +645,7 @@ $(function () {
                 "font-size": 11, "font-weight": "600", fill: "var(--hh-ink)"}));
             var park = mark(X.gate, "gate", true);
             if (park) park.textContent = "park";
-            sensorDot(X.gate + 34, ["gate_entry", "gate_shared"]);
+            sensorDot(X.gate + 34, ["gate_entry", "gate_shared"], park);
 
             add(svg("circle", {cx: X.encoder, cy: y, r: 16, fill: "none",
                 stroke: "var(--hh-accent)", "stroke-width": 2.5, "stroke-dasharray": "5 4"}));
@@ -652,8 +657,8 @@ $(function () {
             cache.progressBar = add(svg("rect", {x: X.bstart, y: y + 20, height: 5, rx: 2.5,
                 fill: "var(--hh-accent)"}));
 
-            sensorDot(X.entry, ["extruder"]);
-            mark(X.entry, "entry", false);
+            var entrySub = mark(X.entry, "entry", true);
+            sensorDot(X.entry, ["extruder"], entrySub);
 
             [-1, 1].forEach(function (side) {
                 add(svg("circle", {cx: X.gears, cy: y + side * 21, r: 13,
@@ -662,8 +667,8 @@ $(function () {
             });
             cache.synced = mark(X.gears, "extruder", true);
 
-            sensorDot(X.ts, ["toolhead"]);
-            mark(X.ts, "toolhead", false);
+            var toolheadSub = mark(X.ts, "toolhead", true);
+            sensorDot(X.ts, ["toolhead"], toolheadSub);
 
             // nozzle lying on its side, tapering along the filament rather than
             // down across it: the wide end faces the toolhead, the tip points out
@@ -761,20 +766,15 @@ $(function () {
             var gripping = /down|grip/i.test(servo);
             var moving = /move/i.test(servo);
             if (cache.servo) {
-                ["box", "arrow", "label"].forEach(function (key) {
+                ["top", "topInner", "bottom", "bottomInner", "sub"].forEach(function (key) {
                     show(cache.servo[key], !!servo);
                 });
             }
             if (servo) {
-                var sx = X.gate - 33;
-                var sy = y - 41;
-                attr(cache.servo.arrow, "d", gripping
-                    ? "M" + (sx - 6) + " " + (sy - 4) + " h12 l-6 10 Z"
-                    : "M" + (sx - 6) + " " + (sy + 6) + " h12 l-6 -10 Z");
-                attr(cache.servo.arrow, "fill", moving ? "var(--hh-warn)"
+                attr(cache.servo.top, "stroke", moving ? "var(--hh-warn)"
                     : gripping ? "var(--hh-ok)" : "var(--hh-muted)");
-                attr(cache.servo.label, "fill", moving ? "var(--hh-warn)" : "var(--hh-ink)");
-                text(cache.servo.label, servo.toUpperCase());
+                attr(cache.servo.topInner, "fill", moving ? "var(--hh-warn)"
+                    : gripping ? "var(--hh-ok)" : "var(--hh-muted)");
             }
 
             text(cache.gateLabel, state.gate >= 0 ? "G" + state.gate
@@ -788,6 +788,9 @@ $(function () {
                 ? state.encoder.flow_rate + "% flow" : null);
             sub(cache.bowden, state.bowden_length ? Math.round(state.bowden_length) + " mm" : null);
             sub(cache.synced, state.sync_drive ? "synced" : null);
+            // the sidebar copy has no servo icon, so there is nothing to caption
+            sub(cache.servo && cache.servo.sub,
+                servo ? (moving ? "moving" : gripping ? "down" : "up") : null);
 
             var progress = state.bowden_progress >= 0;
             show(cache.progressTrack, progress);
@@ -814,6 +817,7 @@ $(function () {
                 }
                 title.textContent = sensor.label + ": "
                     + (on ? "triggered" : off ? "open" : "disabled");
+                if (dot.sub) sub(dot.sub, on ? "triggered" : off ? "open" : "disabled");
             });
         };
 
