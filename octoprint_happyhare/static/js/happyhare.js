@@ -596,6 +596,11 @@ $(function () {
                 height: 26, fill: "var(--hh-surface-3)", opacity: "0.75"}));
 
             // drawn once and shown or hidden per push, so a push only edits attributes
+            // what the gate is fed from: spool or buffer, through the servo, into
+            // the gate. Drawn before the gate block and the gears, so it runs
+            // behind them the way the real filament does.
+            cache.feed = add(svg("line", {x1: 14, y1: y, x2: X.gate, y2: y,
+                "stroke-width": 13, "stroke-linecap": "round"}));
             cache.fill = add(svg("line", {x1: X.gate, y1: y, y2: y, "stroke-width": 13,
                 "stroke-linecap": "round"}));
             cache.unknown = add(svg("text", {x: (X.gate + X.bend) / 2, y: y + 5,
@@ -758,6 +763,12 @@ $(function () {
                 attr(cache.fill, "x2", fill);
                 attr(cache.fill, "stroke", (gate && gate.rgb) || "var(--hh-muted)");
             }
+            // the spool side. Only the gate's own status can answer this: after a
+            // runout the filament is still loaded in the machine while the spool
+            // behind that gate is empty, so "something is loaded" is not evidence
+            var fed = !!gate && (gate.status === 1 || gate.status === 2);
+            show(cache.feed, fed);
+            if (fed) attr(cache.feed, "stroke", gate.rgb || "var(--hh-muted)");
             show(cache.unknown, !known);
 
             // servo: Up / Down / Move on ERCF, Gripped / Released on type B.
